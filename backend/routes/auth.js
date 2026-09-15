@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../db');
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'kuis_ai_secret_super_secure_key_2026_xyz';
+const JWT_SECRET = process.env.JWT_SECRET || 'ruangkuis_secret_super_secure_key_2026_xyz';
 
 // ─── POST /api/auth/register ──────────────────────────────────────────────────
 router.post('/register', async (req, res, next) => {
@@ -20,7 +20,7 @@ router.post('/register', async (req, res, next) => {
     }
 
     // Check if email already registered
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    const existing = await db.prepare('SELECT id FROM users WHERE email = ?').get(email);
     if (existing) {
       return res.status(409).json({ success: false, message: 'Email sudah terdaftar.' });
     }
@@ -28,7 +28,7 @@ router.post('/register', async (req, res, next) => {
     const hashedPassword = await bcrypt.hash(password, 12);
 
     const stmt = db.prepare('INSERT INTO users (name, email, password) VALUES (?, ?, ?)');
-    const result = stmt.run(name, email, hashedPassword);
+    const result = await stmt.run(name, email, hashedPassword);
 
     const token = jwt.sign(
       { id: result.lastInsertRowid, name, email },
@@ -55,7 +55,7 @@ router.post('/login', async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Email dan password wajib diisi.' });
     }
 
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(email);
     if (!user) {
       return res.status(401).json({ success: false, message: 'Email atau password salah.' });
     }

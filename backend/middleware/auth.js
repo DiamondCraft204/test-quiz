@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = process.env.JWT_SECRET || 'kuis_ai_secret_super_secure_key_2026_xyz';
+const JWT_SECRET = process.env.JWT_SECRET || 'ruangkuis_secret_super_secure_key_2026_xyz';
 
 /**
  * Middleware: authenticateUser

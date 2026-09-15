@@ -3,8 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 
-// Initialize DB (runs schema on first import)
-require('./db');
+const db = require('./db');
 
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
@@ -19,10 +18,19 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Static uploads folder
+// Make sure the database (Turso/libSQL) is initialized before handling any
+// request. Cheap after the first call - db.ready() memoizes the promise.
+app.use((req, res, next) => {
+  db.ready().then(() => next()).catch(next);
+});
+
+// Static uploads folder (local dev only - ignored by Vercel Functions,
+// which serve static assets from frontend's own deployment instead)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Serve frontend build files if available
+// Serve frontend build files when running the whole app as one local process
+// (npm start). On Vercel this backend and the frontend are two separate
+// projects/deployments, so this static middleware is simply unused there.
 const frontendDist = path.join(__dirname, '../frontend/dist');
 app.use(express.static(frontendDist));
 
@@ -59,6 +67,14 @@ app.get('*', (req, res) => {
 
 
 // ─── Start Server ─────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`✅ Quiz backend running on http://localhost:${PORT}`);
-});
+// Only listen on a port when run directly (local dev: `node server.js` /
+// `npm run dev`). On Vercel, this file is imported and the exported `app`
+// (an Express app is just a request-handler function) is called directly by
+// the platform - it never runs app.listen().
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`✅ Quiz backend running on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;

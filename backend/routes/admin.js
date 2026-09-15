@@ -29,9 +29,9 @@ const upload = multer({
 });
 
 // ─── GET /api/admin/quizzes ───────────────────────────────────────────────────
-router.get('/quizzes', (req, res, next) => {
+router.get('/quizzes', async (req, res, next) => {
   try {
-    const quizzes = db.prepare(`
+    const quizzes = await db.prepare(`
       SELECT q.*, COUNT(qs.id) AS question_count
       FROM quizzes q
       LEFT JOIN questions qs ON qs.quiz_id = q.id
@@ -102,7 +102,7 @@ router.post('/quizzes', upload.single('material'), async (req, res, next) => {
       INSERT INTO quizzes (title, description, material_filename, material_text, num_questions, timer_minutes, difficulty, question_types)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    const quizResult = quizStmt.run(
+    const quizResult = await quizStmt.run(
       title,
       description || null,
       req.file.originalname,
@@ -115,21 +115,20 @@ router.post('/quizzes', upload.single('material'), async (req, res, next) => {
 
     const quizId = quizResult.lastInsertRowid;
 
-    // Save questions to DB
-    const questionStmt = db.prepare(`
+    // Save all generated questions in a single atomic batch
+    const insertQuestionSql = `
       INSERT INTO questions (quiz_id, type, text, options, correct_answer, explanation, order_num)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
+    `;
+    await db.batch(
+      questions.map((q, idx) => ({
+        sql: insertQuestionSql,
+        args: [quizId, q.type, q.text, q.options, q.correct_answer, q.explanation, idx + 1],
+      }))
+    );
 
-    const insertMany = db.transaction((qs) => {
-      qs.forEach((q, idx) => {
-        questionStmt.run(quizId, q.type, q.text, q.options, q.correct_answer, q.explanation, idx + 1);
-      });
-    });
-    insertMany(questions);
-
-    const savedQuiz = db.prepare('SELECT * FROM quizzes WHERE id = ?').get(quizId);
-    const savedQuestions = db.prepare('SELECT * FROM questions WHERE quiz_id = ? ORDER BY order_num').all(quizId);
+    const savedQuiz = await db.prepare('SELECT * FROM quizzes WHERE id = ?').get(quizId);
+    const savedQuestions = await db.prepare('SELECT * FROM questions WHERE quiz_id = ? ORDER BY order_num').all(quizId);
 
     return res.status(201).json({
       success: true,
@@ -142,14 +141,14 @@ router.post('/quizzes', upload.single('material'), async (req, res, next) => {
 });
 
 // ─── GET /api/admin/quizzes/:id ───────────────────────────────────────────────
-router.get('/quizzes/:id', (req, res, next) => {
+router.get('/quizzes/:id', async (req, res, next) => {
   try {
-    const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
+    const quiz = await db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
     if (!quiz) {
       return res.status(404).json({ success: false, message: 'Kuis tidak ditemukan.' });
     }
 
-    const questions = db.prepare('SELECT * FROM questions WHERE quiz_id = ? ORDER BY order_num').all(quiz.id);
+    const questions = await db.prepare('SELECT * FROM questions WHERE quiz_id = ? ORDER BY order_num').all(quiz.id);
 
     return res.json({ success: true, data: { quiz, questions } });
   } catch (err) {
@@ -158,11 +157,11 @@ router.get('/quizzes/:id', (req, res, next) => {
 });
 
 // ─── PUT /api/admin/quizzes/:id ───────────────────────────────────────────────
-router.put('/quizzes/:id', (req, res, next) => {
+router.put('/quizzes/:id', async (req, res, next) => {
   try {
     const { title, description, timerMinutes, difficulty, numQuestions, questionTypes } = req.body;
 
-    const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
+    const quiz = await db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
     if (!quiz) {
       return res.status(404).json({ success: false, message: 'Kuis tidak ditemukan.' });
     }
@@ -174,13 +173,13 @@ router.put('/quizzes/:id', (req, res, next) => {
     const updatedNumQ = numQuestions !== undefined ? parseInt(numQuestions, 10) : quiz.num_questions;
     const updatedTypes = questionTypes !== undefined ? questionTypes : quiz.question_types;
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE quizzes
       SET title = ?, description = ?, timer_minutes = ?, difficulty = ?, num_questions = ?, question_types = ?
       WHERE id = ?
     `).run(updatedTitle, updatedDescription, updatedTimer, updatedDifficulty, updatedNumQ, updatedTypes, req.params.id);
 
-    const updated = db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
+    const updated = await db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
     return res.json({ success: true, message: 'Kuis berhasil diperbarui.', data: updated });
   } catch (err) {
     next(err);
@@ -188,15 +187,15 @@ router.put('/quizzes/:id', (req, res, next) => {
 });
 
 // ─── DELETE /api/admin/quizzes/:id ───────────────────────────────────────────
-router.delete('/quizzes/:id', (req, res, next) => {
+router.delete('/quizzes/:id', async (req, res, next) => {
   try {
-    const quiz = db.prepare('SELECT id FROM quizzes WHERE id = ?').get(req.params.id);
+    const quiz = await db.prepare('SELECT id FROM quizzes WHERE id = ?').get(req.params.id);
     if (!quiz) {
       return res.status(404).json({ success: false, message: 'Kuis tidak ditemukan.' });
     }
 
     // ON DELETE CASCADE handles questions
-    db.prepare('DELETE FROM quizzes WHERE id = ?').run(req.params.id);
+    await db.prepare('DELETE FROM quizzes WHERE id = ?').run(req.params.id);
 
     return res.json({ success: true, message: 'Kuis berhasil dihapus.' });
   } catch (err) {
@@ -205,15 +204,15 @@ router.delete('/quizzes/:id', (req, res, next) => {
 });
 
 // ─── POST /api/admin/quizzes/:id/publish ─────────────────────────────────────
-router.post('/quizzes/:id/publish', (req, res, next) => {
+router.post('/quizzes/:id/publish', async (req, res, next) => {
   try {
-    const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
+    const quiz = await db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
     if (!quiz) {
       return res.status(404).json({ success: false, message: 'Kuis tidak ditemukan.' });
     }
 
     const newStatus = quiz.is_published === 0 ? 1 : 0;
-    db.prepare('UPDATE quizzes SET is_published = ? WHERE id = ?').run(newStatus, req.params.id);
+    await db.prepare('UPDATE quizzes SET is_published = ? WHERE id = ?').run(newStatus, req.params.id);
 
     const statusLabel = newStatus === 1 ? 'dipublikasikan' : 'disembunyikan';
     return res.json({
@@ -227,14 +226,14 @@ router.post('/quizzes/:id/publish', (req, res, next) => {
 });
 
 // ─── GET /api/admin/quizzes/:id/results ──────────────────────────────────────
-router.get('/quizzes/:id/results', (req, res, next) => {
+router.get('/quizzes/:id/results', async (req, res, next) => {
   try {
-    const quiz = db.prepare('SELECT id, title FROM quizzes WHERE id = ?').get(req.params.id);
+    const quiz = await db.prepare('SELECT id, title FROM quizzes WHERE id = ?').get(req.params.id);
     if (!quiz) {
       return res.status(404).json({ success: false, message: 'Kuis tidak ditemukan.' });
     }
 
-    const submissions = db.prepare(`
+    const submissions = await db.prepare(`
       SELECT s.*, u.name AS user_name, u.email AS user_email
       FROM submissions s
       JOIN users u ON u.id = s.user_id
@@ -251,7 +250,7 @@ router.get('/quizzes/:id/results', (req, res, next) => {
 // ─── POST /api/admin/quizzes/:id/regenerate ──────────────────────────────────
 router.post('/quizzes/:id/regenerate', async (req, res, next) => {
   try {
-    const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
+    const quiz = await db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
     if (!quiz) {
       return res.status(404).json({ success: false, message: 'Kuis tidak ditemukan.' });
     }
@@ -279,20 +278,20 @@ router.post('/quizzes/:id/regenerate', async (req, res, next) => {
     }
 
     // Delete existing questions and replace
-    db.prepare('DELETE FROM questions WHERE quiz_id = ?').run(quiz.id);
+    await db.prepare('DELETE FROM questions WHERE quiz_id = ?').run(quiz.id);
 
-    const questionStmt = db.prepare(`
+    const insertQuestionSql = `
       INSERT INTO questions (quiz_id, type, text, options, correct_answer, explanation, order_num)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-    const insertMany = db.transaction((qs) => {
-      qs.forEach((q, idx) => {
-        questionStmt.run(quiz.id, q.type, q.text, q.options, q.correct_answer, q.explanation, idx + 1);
-      });
-    });
-    insertMany(questions);
+    `;
+    await db.batch(
+      questions.map((q, idx) => ({
+        sql: insertQuestionSql,
+        args: [quiz.id, q.type, q.text, q.options, q.correct_answer, q.explanation, idx + 1],
+      }))
+    );
 
-    const savedQuestions = db.prepare('SELECT * FROM questions WHERE quiz_id = ? ORDER BY order_num').all(quiz.id);
+    const savedQuestions = await db.prepare('SELECT * FROM questions WHERE quiz_id = ? ORDER BY order_num').all(quiz.id);
 
     return res.json({
       success: true,
@@ -305,11 +304,11 @@ router.post('/quizzes/:id/regenerate', async (req, res, next) => {
 });
 
 // ─── PUT /api/admin/questions/:id ─────────────────────────────────────────────
-router.put('/questions/:id', (req, res, next) => {
+router.put('/questions/:id', async (req, res, next) => {
   try {
     const { text, type, options, correct_answer, explanation, order_num } = req.body;
 
-    const question = db.prepare('SELECT * FROM questions WHERE id = ?').get(req.params.id);
+    const question = await db.prepare('SELECT * FROM questions WHERE id = ?').get(req.params.id);
     if (!question) {
       return res.status(404).json({ success: false, message: 'Soal tidak ditemukan.' });
     }
@@ -323,13 +322,13 @@ router.put('/questions/:id', (req, res, next) => {
     const updatedExplanation = explanation !== undefined ? explanation : question.explanation;
     const updatedOrder = order_num !== undefined ? parseInt(order_num, 10) : question.order_num;
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE questions
       SET type = ?, text = ?, options = ?, correct_answer = ?, explanation = ?, order_num = ?
       WHERE id = ?
     `).run(updatedType, updatedText, updatedOptions, updatedAnswer, updatedExplanation, updatedOrder, req.params.id);
 
-    const updated = db.prepare('SELECT * FROM questions WHERE id = ?').get(req.params.id);
+    const updated = await db.prepare('SELECT * FROM questions WHERE id = ?').get(req.params.id);
     return res.json({ success: true, message: 'Soal berhasil diperbarui.', data: updated });
   } catch (err) {
     next(err);
@@ -337,14 +336,14 @@ router.put('/questions/:id', (req, res, next) => {
 });
 
 // ─── DELETE /api/admin/questions/:id ─────────────────────────────────────────
-router.delete('/questions/:id', (req, res, next) => {
+router.delete('/questions/:id', async (req, res, next) => {
   try {
-    const question = db.prepare('SELECT id FROM questions WHERE id = ?').get(req.params.id);
+    const question = await db.prepare('SELECT id FROM questions WHERE id = ?').get(req.params.id);
     if (!question) {
       return res.status(404).json({ success: false, message: 'Soal tidak ditemukan.' });
     }
 
-    db.prepare('DELETE FROM questions WHERE id = ?').run(req.params.id);
+    await db.prepare('DELETE FROM questions WHERE id = ?').run(req.params.id);
     return res.json({ success: true, message: 'Soal berhasil dihapus.' });
   } catch (err) {
     next(err);
@@ -352,7 +351,7 @@ router.delete('/questions/:id', (req, res, next) => {
 });
 
 // ─── POST /api/admin/quizzes/:id/questions ────────────────────────────────────
-router.post('/quizzes/:id/questions', (req, res, next) => {
+router.post('/quizzes/:id/questions', async (req, res, next) => {
   try {
     const { text, type, options, correct_answer, explanation } = req.body;
 
@@ -360,25 +359,25 @@ router.post('/quizzes/:id/questions', (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Field text dan type wajib diisi.' });
     }
 
-    const quiz = db.prepare('SELECT id FROM quizzes WHERE id = ?').get(req.params.id);
+    const quiz = await db.prepare('SELECT id FROM quizzes WHERE id = ?').get(req.params.id);
     if (!quiz) {
       return res.status(404).json({ success: false, message: 'Kuis tidak ditemukan.' });
     }
 
     // Determine next order number
-    const maxOrder = db.prepare('SELECT MAX(order_num) AS max FROM questions WHERE quiz_id = ?').get(req.params.id);
+    const maxOrder = await db.prepare('SELECT MAX(order_num) AS max FROM questions WHERE quiz_id = ?').get(req.params.id);
     const orderNum = (maxOrder.max || 0) + 1;
 
     const serializedOptions = options
       ? (typeof options === 'string' ? options : JSON.stringify(options))
       : null;
 
-    const result = db.prepare(`
+    const result = await db.prepare(`
       INSERT INTO questions (quiz_id, type, text, options, correct_answer, explanation, order_num)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(req.params.id, type, text, serializedOptions, correct_answer || null, explanation || null, orderNum);
 
-    const saved = db.prepare('SELECT * FROM questions WHERE id = ?').get(result.lastInsertRowid);
+    const saved = await db.prepare('SELECT * FROM questions WHERE id = ?').get(result.lastInsertRowid);
 
     return res.status(201).json({ success: true, message: 'Soal berhasil ditambahkan.', data: saved });
   } catch (err) {

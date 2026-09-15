@@ -80,7 +80,7 @@ quiz-app/
 ├── backend/
 │   ├── .env                  # Konfigurasi (GEMINI_API_KEY dll)
 │   ├── server.js             # Express server
-│   ├── db.js                 # SQLite database
+│   ├── db.js                 # Database (Turso/libSQL di production, file SQLite lokal saat dev)
 │   ├── middleware/auth.js    # JWT middleware
 │   ├── routes/
 │   │   ├── auth.js           # Register, login
@@ -118,3 +118,8 @@ quiz-app/
 | POST | /api/admin/quizzes/:id/publish | Toggle publish |
 | POST | /api/admin/quizzes/:id/regenerate | Regenerasi soal |
 | GET | /api/admin/quizzes/:id/results | Hasil peserta |
+
+---
+
+## Deploy ke Vercel
+Lihat `DEPLOY.md` untuk panduan lengkap deploy gratis ke Vercel (backend + frontend, database pakai Turso).
