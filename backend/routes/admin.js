@@ -36,7 +36,7 @@ const upload = multer({
 router.get('/quizzes', async (req, res, next) => {
   try {
     const result = await db.query(`
-      SELECT q.*, COUNT(qs.id) AS question_count
+      SELECT q.*, COUNT(qs.id)::int AS question_count
       FROM quizzes q
       LEFT JOIN questions qs ON qs.quiz_id = q.id
       GROUP BY q.id

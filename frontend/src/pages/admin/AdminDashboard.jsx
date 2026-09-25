@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { adminApi } from '../../api/axios'
 import {
   GraduationCap, Plus, LogOut, BookOpen, Users, CheckCircle, XCircle,
-  Trash2, Eye, BarChart2, Upload, Loader2, X, ChevronDown, RefreshCw, Settings
+  Trash2, Eye, BarChart2, Upload, Loader2, X, ChevronDown, RefreshCw, Settings, FileQuestion
 } from 'lucide-react'
 
 const DIFFICULTIES = ['mudah', 'sedang', 'sulit']
@@ -301,17 +301,52 @@ export default function AdminDashboard() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {[
-            { label: 'Total Kuis', value: quizzes.length, icon: BookOpen, color: 'indigo' },
-            { label: 'Dipublikasi', value: quizzes.filter(q => q.is_published).length, icon: CheckCircle, color: 'green' },
-            { label: 'Draft', value: quizzes.filter(q => !q.is_published).length, icon: XCircle, color: 'yellow' },
-            { label: 'Total Soal', value: quizzes.reduce((s, q) => s + (q.question_count || 0), 0), icon: Users, color: 'purple' },
-          ].map(({ label, value, icon: Icon, color }) => (
-            <div key={label} className="bg-white rounded-xl shadow-sm border p-4">
-              <div className={`text-${color}-600 mb-2`}><Icon className="w-5 h-5" /></div>
-              <div className="text-2xl font-bold text-gray-800">{value}</div>
-              <div className="text-sm text-gray-500">{label}</div>
+            {
+              label: 'Total Kuis',
+              value: quizzes.length,
+              icon: BookOpen,
+              bg: 'bg-indigo-50',
+              text: 'text-indigo-600',
+              border: 'border-indigo-100',
+            },
+            {
+              label: 'Dipublikasi',
+              value: quizzes.filter(q => q.is_published).length,
+              icon: CheckCircle,
+              bg: 'bg-emerald-50',
+              text: 'text-emerald-600',
+              border: 'border-emerald-100',
+            },
+            {
+              label: 'Draft',
+              value: quizzes.filter(q => !q.is_published).length,
+              icon: XCircle,
+              bg: 'bg-amber-50',
+              text: 'text-amber-600',
+              border: 'border-amber-100',
+            },
+            {
+              label: 'Total Soal',
+              value: quizzes.reduce((s, q) => s + (parseInt(q.question_count, 10) || 0), 0),
+              icon: FileQuestion,
+              bg: 'bg-purple-50',
+              text: 'text-purple-600',
+              border: 'border-purple-100',
+            },
+          ].map(({ label, value, icon: Icon, bg, text, border }) => (
+            <div
+              key={label}
+              className={`bg-white rounded-2xl shadow-sm border ${border} p-5 flex items-center justify-between hover:shadow-md transition`}
+            >
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">{label}</p>
+                <div className="text-3xl font-extrabold text-gray-800 tracking-tight">{value}</div>
+              </div>
+              <div className={`w-12 h-12 rounded-xl ${bg} ${text} flex items-center justify-center flex-shrink-0`}>
+                <Icon className="w-6 h-6" />
+              </div>
             </div>
           ))}
         </div>
