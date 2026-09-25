@@ -56,6 +56,10 @@ function CreateQuizModal({ onClose, onSuccess }) {
     e.preventDefault()
     setError('')
     if (!file) { setError('Pilih file materi terlebih dahulu.'); return }
+    if (file.size > 4.5 * 1024 * 1024) {
+      setError(`Ukuran file terlalu besar (${(file.size / 1024 / 1024).toFixed(1)} MB). Batas upload server Vercel adalah maksimal 4.5 MB. Silakan gunakan modul/bab materi atau ringkasan PDF.`);
+      return;
+    }
     if (form.questionTypes.length === 0) { setError('Pilih minimal satu tipe soal.'); return }
 
     setLoading(true)
@@ -77,7 +81,13 @@ function CreateQuizModal({ onClose, onSuccess }) {
       })
       onSuccess(res.data.data)
     } catch (err) {
-      setError(err.response?.data?.message || 'Gagal membuat kuis.')
+      if (err.response?.status === 413) {
+        setError('Ukuran file melebihi batas upload Vercel (maksimal 4.5 MB). Silakan gunakan bab/modul materi tertentu.');
+      } else if (err.response?.status === 504) {
+        setError('Waktu pemrosesan melebihi batas timeout Vercel. Coba gunakan materi yang lebih ringkas.');
+      } else {
+        setError(err.response?.data?.message || err.message || 'Gagal membuat kuis.');
+      }
     } finally {
       setLoading(false)
       setProgress('')
