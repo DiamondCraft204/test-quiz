@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../db');
 const { authenticateUser } = require('../middleware/auth');
+const { evaluateEssayAnswers } = require('../services/aiService');
 
 const router = express.Router();
 
@@ -167,7 +168,7 @@ router.get('/:id', authenticateUser, async (req, res, next) => {
 });
 
 // ─── POST /api/quiz/:id/submit ─────────────────────────────────────────────
-// Submit answers, auto-grade pilihan_ganda and benar_salah, defer essay
+// Submit answers, auto-grade pilihan_ganda, benar_salah, and evaluate essay
 router.post('/:id/submit', authenticateUser, async (req, res, next) => {
   try {
     const { answers, timeTaken } = req.body;
@@ -189,44 +190,84 @@ router.post('/:id/submit', authenticateUser, async (req, res, next) => {
     const questionMap = {};
     questions.forEach((q) => { questionMap[q.id] = q; });
 
-    let correctCount = 0;
-    let gradableCount = 0;
+    // Collect essay questions for smart AI evaluation
+    const essayItems = [];
+    answers.forEach((a) => {
+      const question = questionMap[a.questionId];
+      if (question && question.type === 'essay') {
+        essayItems.push({
+          questionId: question.id,
+          questionText: question.text,
+          keyAnswer: question.correct_answer || '',
+          userAnswer: (a.answer || '').trim(),
+        });
+      }
+    });
+
+    let essayEvaluations = {};
+    if (essayItems.length > 0) {
+      try {
+        essayEvaluations = await evaluateEssayAnswers(essayItems);
+      } catch (err) {
+        console.error('Error saat evaluasi essay:', err.message);
+      }
+    }
+
+    let earnedPoints = 0;
+    let fullCorrectCount = 0;
 
     const gradedAnswers = answers.map((a) => {
       const question = questionMap[a.questionId];
       if (!question) {
-        return { ...a, isCorrect: false, correctAnswer: null, explanation: null, needsReview: false };
+        return { ...a, isCorrect: false, score: 0, correctAnswer: null, explanation: null, needsReview: false };
       }
 
       const isEssay = question.type === 'essay';
-      let isCorrect = false;
-      let needsReview = false;
 
       if (isEssay) {
-        needsReview = true;
-        isCorrect = false;
+        const evalRes = essayEvaluations[question.id] || { score: 0, feedback: '', isCorrect: false };
+        const score = Math.max(0, Math.min(100, Math.round(evalRes.score || 0)));
+        const questionPoints = score / 100; // 0.0 to 1.0
+        earnedPoints += questionPoints;
+        if (score >= 80) fullCorrectCount++;
+
+        return {
+          questionId: a.questionId,
+          answer: a.answer,
+          questionText: question.text,
+          isCorrect: evalRes.isCorrect,
+          score,
+          feedback: evalRes.feedback,
+          needsReview: false,
+          correctAnswer: question.correct_answer,
+          explanation: question.explanation,
+          questionType: question.type,
+        };
       } else {
         const userAnswer = (a.answer || '').trim().toLowerCase();
         const correctAnswer = (question.correct_answer || '').trim().toLowerCase();
-        isCorrect = userAnswer === correctAnswer;
-        gradableCount++;
-        if (isCorrect) correctCount++;
-      }
+        const isCorrect = userAnswer === correctAnswer;
+        if (isCorrect) {
+          earnedPoints += 1;
+          fullCorrectCount++;
+        }
 
-      return {
-        questionId: a.questionId,
-        answer: a.answer,
-        questionText: question.text,
-        isCorrect: isEssay ? null : isCorrect,
-        needsReview,
-        correctAnswer: question.correct_answer,
-        explanation: question.explanation,
-        questionType: question.type,
-      };
+        return {
+          questionId: a.questionId,
+          answer: a.answer,
+          questionText: question.text,
+          isCorrect,
+          score: isCorrect ? 100 : 0,
+          needsReview: false,
+          correctAnswer: question.correct_answer,
+          explanation: question.explanation,
+          questionType: question.type,
+        };
+      }
     });
 
-    const totalQuestions = questions.length;
-    const score = gradableCount > 0 ? (correctCount / totalQuestions) * 100 : 0;
+    const totalQuestions = questions.length || answers.length || 1;
+    const finalScore = Math.round(((earnedPoints / totalQuestions) * 100) * 10) / 10;
 
     const subInsert = await db.query(
       `INSERT INTO submissions (quiz_id, user_id, answers, score, total_questions, correct_count, time_taken)
@@ -236,9 +277,9 @@ router.post('/:id/submit', authenticateUser, async (req, res, next) => {
         quiz.id,
         req.user.id,
         JSON.stringify(gradedAnswers),
-        Math.round(score * 100) / 100,
+        finalScore,
         totalQuestions,
-        correctCount,
+        fullCorrectCount,
         timeTaken ? parseInt(timeTaken, 10) : null,
       ]
     );

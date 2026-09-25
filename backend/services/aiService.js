@@ -159,4 +159,178 @@ ${cleanMaterial}`;
   return validated;
 };
 
-module.exports = { generateQuestions };
+/**
+ * Evaluasi jawaban essay siswa menggunakan Gemini AI atau algoritma cerdas fallback.
+ * Memberikan nilai sempurna jika sesuai, dan nilai proporsional jika mendekati.
+ *
+ * @param {Array<{ questionId: number, questionText: string, keyAnswer: string, userAnswer: string }>} essayItems
+ * @returns {Promise<Record<number, { score: number, feedback: string, isCorrect: boolean | string }>>}
+ */
+const evaluateEssayAnswers = async (essayItems) => {
+  const results = {};
+  if (!essayItems || essayItems.length === 0) return results;
+
+  // Fallback similarity evaluator jika AI sedang sibuk / offline
+  const fallbackEvaluate = (item) => {
+    const userText = (item.userAnswer || '').trim().toLowerCase();
+    const keyText = (item.keyAnswer || '').trim().toLowerCase();
+
+    if (!userText) {
+      return { score: 0, feedback: 'Tidak ada jawaban yang diberikan.', isCorrect: false };
+    }
+
+    if (userText === keyText) {
+      return { score: 100, feedback: 'Jawaban sempurna dan persis sesuai kunci jawaban.', isCorrect: true };
+    }
+
+    const stopWords = new Set([
+      'dan', 'atau', 'yang', 'di', 'ke', 'dari', 'pada', 'dalam', 'untuk',
+      'dengan', 'adalah', 'yaitu', 'merupakan', 'sebagai', 'oleh', 'ini',
+      'itu', 'karena', 'bisa', 'dapat', 'akan', 'telah', 'sudah', 'secara'
+    ]);
+
+    const getKeywords = (text) => {
+      return text
+        .replace(/[^\w\s]/g, ' ')
+        .split(/\s+/)
+        .map(w => w.trim())
+        .filter(w => w.length > 2 && !stopWords.has(w));
+    };
+
+    const keyWords = getKeywords(keyText);
+    const userWords = new Set(getKeywords(userText));
+
+    if (keyWords.length === 0) {
+      return userText.length > 5
+        ? { score: 85, feedback: 'Jawaban mendekati kunci jawaban.', isCorrect: true }
+        : { score: 30, feedback: 'Jawaban terlalu singkat.', isCorrect: false };
+    }
+
+    let matchCount = 0;
+    keyWords.forEach(kw => {
+      if (userWords.has(kw) || userText.includes(kw)) {
+        matchCount++;
+      }
+    });
+
+    const matchRatio = matchCount / keyWords.length;
+
+    let score = 0;
+    let feedback = '';
+    let isCorrect = false;
+
+    if (matchRatio >= 0.8) {
+      score = 100;
+      feedback = 'Jawaban sangat lengkap dan sesuai dengan kunci jawaban!';
+      isCorrect = true;
+    } else if (matchRatio >= 0.6) {
+      score = 85;
+      feedback = 'Jawaban sangat mendekati dan memuat sebagian besar konsep utama.';
+      isCorrect = true;
+    } else if (matchRatio >= 0.4) {
+      score = 70;
+      feedback = 'Jawaban mendekati beberapa poin penting yang diharapkan.';
+      isCorrect = 'partial';
+    } else if (matchRatio >= 0.2) {
+      score = 50;
+      feedback = 'Jawaban mencakup sebagian kecil poin inti, namun masih perlu dilengkapi.';
+      isCorrect = 'partial';
+    } else {
+      score = 25;
+      feedback = 'Jawaban kurang tepat atau belum mencakup poin-poin utama.';
+      isCorrect = false;
+    }
+
+    return { score, feedback, isCorrect };
+  };
+
+  if (!process.env.GEMINI_API_KEY) {
+    essayItems.forEach(item => {
+      results[item.questionId] = fallbackEvaluate(item);
+    });
+    return results;
+  }
+
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const prompt = `Kamu adalah guru / penguji ujian yang adil dan objektif. Nilailah jawaban essay siswa berikut berdasarkan pertanyaan dan kunci jawaban/poin penting.
+
+ATURAN PENILAIAN:
+- "score": Berikan nilai integer antara 0 sampai 100.
+  * 100 (Sempurna): Jika jawaban siswa SESUAI atau mencakup seluruh poin inti yang diminta (berikan nilai sempurna 100).
+  * 60 - 95 (Mendekati): Jika jawaban siswa MENDEKATI kunci jawaban atau memuat sebagian besar konsep utama yang benar, berikan nilai proporsional (misal 70, 75, 80, 85, 90).
+  * 25 - 55 (Kurang Lengkap): Jika hanya menyebutkan sedikit konsep yang benar.
+  * 0: Jika jawaban kosong, ngawur, atau sama sekali tidak relevan.
+- "feedback": Penjelasan singkat 1-2 kalimat dalam Bahasa Indonesia yang ramah dan konstruktif mengenai alasan nilai tersebut.
+- "isCorrect": true (jika score >= 70), "partial" (jika score antara 40-69), false (jika score < 40).
+
+Daftar soal dan jawaban siswa yang harus dinilai:
+${JSON.stringify(essayItems.map(item => ({
+  questionId: item.questionId,
+  pertanyaan: item.questionText,
+  kunci_jawaban: item.keyAnswer,
+  jawaban_siswa: item.userAnswer || '(kosong)'
+})), null, 2)}
+
+KEMBALIKAN HANYA ARRAY JSON VALID tanpa markdown codeblock atau teks lainnya:
+[
+  {
+    "questionId": 123,
+    "score": 85,
+    "feedback": "Penjelasan...",
+    "isCorrect": true
+  }
+]`;
+
+    const modelsToTry = [
+      'gemini-flash-latest',
+      'gemini-3.8-flash',
+      'gemini-3.7-flash',
+      'gemini-flash-lite-latest',
+    ];
+
+    let aiResult = null;
+    for (const modelName of modelsToTry) {
+      try {
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: prompt,
+          config: { responseMimeType: 'application/json' },
+        });
+        if (response && response.text) {
+          const cleaned = response.text.replace(/```json/gi, '').replace(/```/g, '').trim();
+          aiResult = JSON.parse(cleaned);
+          break;
+        }
+      } catch (err) {
+        console.warn(`[AI Essay Evaluation] Model ${modelName} error:`, err.message);
+      }
+    }
+
+    if (Array.isArray(aiResult)) {
+      aiResult.forEach(res => {
+        if (res && res.questionId) {
+          const score = Math.max(0, Math.min(100, Math.round(res.score || 0)));
+          results[res.questionId] = {
+            score,
+            feedback: res.feedback || (score >= 70 ? 'Jawaban baik.' : 'Jawaban perlu ditingkatkan.'),
+            isCorrect: res.isCorrect !== undefined ? res.isCorrect : (score >= 70 ? true : score >= 40 ? 'partial' : false)
+          };
+        }
+      });
+    }
+  } catch (err) {
+    console.error('Error saat evaluasi essay via Gemini:', err);
+  }
+
+  // Ensure all essay items have a result
+  essayItems.forEach(item => {
+    if (!results[item.questionId]) {
+      results[item.questionId] = fallbackEvaluate(item);
+    }
+  });
+
+  return results;
+};
+
+module.exports = { generateQuestions, evaluateEssayAnswers };

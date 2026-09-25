@@ -116,19 +116,27 @@ export default function QuizResults() {
                   </div>
                   {expanded === sub.id && answers.length > 0 && (
                     <div className="border-t p-4 bg-gray-50 space-y-2">
-                      {answers.map((a, i) => (
-                        <div key={i} className={`text-sm px-3 py-2 rounded-lg ${
-                          a.isCorrect === true ? 'bg-green-50 text-green-800' :
-                          a.isCorrect === false ? 'bg-red-50 text-red-800' :
-                          'bg-yellow-50 text-yellow-800'
-                        }`}>
-                          <span className="font-medium">Soal {i + 1}:</span> {a.questionText?.substring(0, 60)}...
-                          <span className="ml-2">→ Jawaban: <span className="font-medium">{a.answer || '(kosong)'}</span></span>
-                          {a.isCorrect === true && ' ✓'}
-                          {a.isCorrect === false && ` ✗ (Benar: ${a.correctAnswer})`}
-                          {a.isCorrect === null && ' (Essay - perlu review)'}
-                        </div>
-                      ))}
+                      {answers.map((a, i) => {
+                        const isEssay = a.questionType === 'essay';
+                        return (
+                          <div key={i} className={`text-sm px-3 py-2 rounded-lg ${
+                            a.isCorrect === true ? 'bg-green-50 text-green-800' :
+                            a.isCorrect === 'partial' || (isEssay && (a.score || 0) >= 40) ? 'bg-amber-50 text-amber-800' :
+                            a.isCorrect === false ? 'bg-red-50 text-red-800' :
+                            'bg-yellow-50 text-yellow-800'
+                          }`}>
+                            <span className="font-medium">Soal {i + 1}:</span> {a.questionText?.substring(0, 60)}...
+                            <span className="ml-2">→ Jawaban: <span className="font-medium">{a.answer || '(kosong)'}</span></span>
+                            {isEssay && (
+                              <span className="ml-2 font-semibold">
+                                [Essay: Nilai {a.score ?? 0}/100{a.feedback ? ` - ${a.feedback}` : ''}]
+                              </span>
+                            )}
+                            {!isEssay && a.isCorrect === true && ' ✓'}
+                            {!isEssay && a.isCorrect === false && ` ✗ (Benar: ${a.correctAnswer})`}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

@@ -103,20 +103,28 @@ export default function ResultPage() {
             } else if (typeof q?.options === 'string') {
               try { opts = JSON.parse(q.options) } catch { opts = [] }
             }
-            const isEssay = q?.type === 'essay'
-            const status = isEssay ? 'essay' : a.isCorrect ? 'correct' : 'wrong'
+            const isEssay = q?.type === 'essay' || a.questionType === 'essay'
+            const essayScore = a.score !== undefined ? a.score : null
+            let status = 'wrong'
+            if (isEssay) {
+              if (essayScore >= 80) status = 'correct'
+              else if (essayScore >= 40) status = 'partial'
+              else status = 'wrong'
+            } else {
+              status = a.isCorrect ? 'correct' : 'wrong'
+            }
 
             return (
               <div key={idx} className={`bg-white rounded-xl border shadow-sm overflow-hidden ${
-                status === 'correct' ? 'border-l-4 border-l-green-400' :
-                status === 'wrong' ? 'border-l-4 border-l-red-400' :
-                'border-l-4 border-l-purple-400'
+                status === 'correct' ? 'border-l-4 border-l-green-500' :
+                status === 'partial' ? 'border-l-4 border-l-amber-500' :
+                'border-l-4 border-l-red-400'
               }`}>
                 <div className="p-5">
                   <div className="flex items-start gap-3 mb-3">
                     {status === 'correct' && <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />}
+                    {status === 'partial' && <CheckCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />}
                     {status === 'wrong' && <XCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />}
-                    {status === 'essay' && <MessageSquare className="w-5 h-5 text-purple-500 flex-shrink-0 mt-0.5" />}
                     <div className="flex-1">
                       <span className="text-xs font-bold text-gray-400 mb-1 block">Soal {idx + 1}</span>
                       <p className="text-gray-800 font-medium">{a.questionText || q?.text}</p>
@@ -144,7 +152,7 @@ export default function ResultPage() {
                     </div>
                   )}
 
-                  {/* Jawaban user untuk benar/salah & essay */}
+                  {/* Jawaban user untuk benar/salah */}
                   {opts.length === 0 && !isEssay && (
                     <div className="ml-8 space-y-1 mb-2 text-sm">
                       <div className={`px-3 py-1.5 rounded-lg ${a.isCorrect ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
@@ -154,17 +162,35 @@ export default function ResultPage() {
                     </div>
                   )}
 
+                  {/* Jawaban user untuk Essay */}
                   {isEssay && (
-                    <div className="ml-8 space-y-2 text-sm">
-                      <div className="bg-purple-50 text-purple-800 px-3 py-2 rounded-lg">
-                        <span className="font-medium">Jawaban kamu:</span> {a.answer || '(tidak dijawab)'}
+                    <div className="ml-8 space-y-2 text-sm mt-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`text-xs font-bold px-3 py-1 rounded-full ${
+                          (a.score ?? 0) === 100 ? 'bg-green-100 text-green-800' :
+                          (a.score ?? 0) >= 70 ? 'bg-blue-100 text-blue-800' :
+                          (a.score ?? 0) >= 40 ? 'bg-amber-100 text-amber-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          Nilai: {a.score ?? 0}/100 {(a.score ?? 0) === 100 ? '⭐ Sempurna' : (a.score ?? 0) >= 60 ? '👍 Mendekati' : ''}
+                        </span>
                       </div>
-                      {a.correctAnswer && (
-                        <div className="bg-gray-50 text-gray-700 px-3 py-2 rounded-lg">
-                          <span className="font-medium">Kunci jawaban:</span> {a.correctAnswer}
+
+                      <div className="bg-purple-50 text-purple-900 px-3 py-2 rounded-lg">
+                        <span className="font-semibold">Jawaban kamu:</span> {a.answer || '(tidak dijawab)'}
+                      </div>
+
+                      {a.feedback && (
+                        <div className="bg-indigo-50 text-indigo-800 px-3 py-2.5 rounded-lg border border-indigo-100">
+                          <span className="font-semibold">💬 Evaluasi:</span> {a.feedback}
                         </div>
                       )}
-                      <div className="text-xs text-purple-600 italic">* Essay tidak dihitung otomatis dalam skor</div>
+
+                      {a.correctAnswer && (
+                        <div className="bg-gray-50 text-gray-700 px-3 py-2 rounded-lg">
+                          <span className="font-semibold">Kunci jawaban / Poin inti:</span> {a.correctAnswer}
+                        </div>
+                      )}
                     </div>
                   )}
 
