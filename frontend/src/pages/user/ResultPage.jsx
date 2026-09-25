@@ -98,7 +98,11 @@ export default function ResultPage() {
           {answers.map((a, idx) => {
             const q = questions.find(q => q.id === a.questionId)
             let opts = []
-            try { opts = q?.options ? JSON.parse(q.options) : [] } catch { }
+            if (Array.isArray(q?.options)) {
+              opts = q.options
+            } else if (typeof q?.options === 'string') {
+              try { opts = JSON.parse(q.options) } catch { opts = [] }
+            }
             const isEssay = q?.type === 'essay'
             const status = isEssay ? 'essay' : a.isCorrect ? 'correct' : 'wrong'
 
@@ -123,9 +127,10 @@ export default function ResultPage() {
                   {opts.length > 0 && (
                     <div className="space-y-1.5 mb-3 ml-8">
                       {opts.map((opt, i) => {
-                        const letter = opt.charAt(0)
-                        const isCorrectOpt = letter === a.correctAnswer
-                        const isUserOpt = letter === a.answer
+                        const match = typeof opt === 'string' ? opt.match(/^([A-D])[\.\)]\s*/i) : null
+                        const letter = match ? match[1].toUpperCase() : (typeof opt === 'string' ? opt.charAt(0) : '')
+                        const isCorrectOpt = letter === a.correctAnswer || opt === a.correctAnswer
+                        const isUserOpt = letter === a.answer || opt === a.answer
                         return (
                           <div key={i} className={`text-sm px-3 py-1.5 rounded-lg ${
                             isCorrectOpt ? 'bg-green-50 text-green-800 font-medium' :

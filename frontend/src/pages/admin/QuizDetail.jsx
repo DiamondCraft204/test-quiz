@@ -18,10 +18,23 @@ function Badge({ type }) {
   return <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${colors[color]}`}>{TYPE_LABELS[type] || type}</span>
 }
 
+const parseOptions = (raw) => {
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
 function QuestionCard({ q, onEdit, onDelete, idx }) {
   const [deleting, setDeleting] = useState(false)
-  let options = []
-  try { options = q.options ? JSON.parse(q.options) : [] } catch { options = [] }
+  const options = parseOptions(q.options)
 
   return (
     <div className="bg-white border rounded-xl p-5 shadow-sm hover:shadow-md transition">
@@ -78,7 +91,7 @@ function EditModal({ question, onClose, onSave }) {
     type: question?.type || 'pilihan_ganda',
     correct_answer: question?.correct_answer || '',
     explanation: question?.explanation || '',
-    options: (() => { try { return question?.options ? JSON.parse(question.options) : [] } catch { return [] } })()
+    options: parseOptions(question?.options)
   })
   const [saving, setSaving] = useState(false)
 

@@ -98,7 +98,11 @@ export default function QuizPage() {
   const q = questions[current]
   const answeredCount = Object.keys(answers).filter(k => answers[k] !== '').length
   let options = []
-  try { options = q?.options ? JSON.parse(q.options) : [] } catch { }
+  if (Array.isArray(q?.options)) {
+    options = q.options
+  } else if (typeof q?.options === 'string') {
+    try { options = JSON.parse(q.options) } catch { options = [] }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -155,10 +159,11 @@ export default function QuizPage() {
             {q.type === 'pilihan_ganda' && options.length > 0 && (
               <div className="space-y-3">
                 {options.map((opt, i) => {
-                  const letter = opt.charAt(0)
-                  const selected = answers[q.id] === letter
+                  const match = typeof opt === 'string' ? opt.match(/^([A-D])[\.\)]\s*/i) : null
+                  const letter = match ? match[1].toUpperCase() : (typeof opt === 'string' ? opt.charAt(0) : '')
+                  const selected = answers[q.id] === letter || answers[q.id] === opt
                   return (
-                    <button key={i} onClick={() => setAnswer(q.id, letter)}
+                    <button key={i} onClick={() => setAnswer(q.id, letter || opt)}
                       className={`w-full text-left px-4 py-3 rounded-xl border-2 transition font-medium ${
                         selected
                           ? 'border-indigo-500 bg-indigo-50 text-indigo-800'
