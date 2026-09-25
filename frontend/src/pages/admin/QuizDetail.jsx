@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { adminApi } from '../../api/axios'
 import {
   GraduationCap, ArrowLeft, Plus, Trash2, Edit3, RefreshCw, Save,
-  X, Loader2, CheckCircle, BookOpen, MessageSquare, ToggleLeft
+  X, Loader2, CheckCircle, BookOpen, MessageSquare, ToggleLeft, BarChart2
 } from 'lucide-react'
 
 const TYPE_LABELS = { pilihan_ganda: 'Pilihan Ganda', benar_salah: 'Benar/Salah', essay: 'Essay' }
