@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../../api/axios'
-import { Brain, Clock, ChevronLeft, ChevronRight, Send, AlertCircle, Loader2 } from 'lucide-react'
+import { GraduationCap, Clock, ChevronLeft, ChevronRight, Send, AlertCircle, Loader2 } from 'lucide-react'
 
 function Timer({ minutes, onExpire, quizId }) {
   const startKey = `quiz_start_${quizId}`
@@ -106,7 +106,7 @@ export default function QuizPage() {
       <div className="bg-white shadow-sm border-b sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2 text-indigo-600 font-bold">
-            <Brain className="w-5 h-5" />
+            <GraduationCap className="w-5 h-5" />
             <span className="hidden sm:block">{quiz?.title}</span>
           </div>
           <div className="flex items-center gap-3">

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../../api/axios'
-import { Brain, CheckCircle, XCircle, MessageSquare, ArrowLeft, Trophy, Clock, Loader2 } from 'lucide-react'
+import { GraduationCap, CheckCircle, XCircle, MessageSquare, ArrowLeft, Trophy, Clock, Loader2 } from 'lucide-react'
 
 function ScoreCircle({ score }) {
   const r = 54
@@ -63,9 +63,10 @@ export default function ResultPage() {
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white shadow-sm border-b sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-2 text-indigo-600 font-bold">
-          <Brain className="w-5 h-5" /> KuisAI
+          <GraduationCap className="w-5 h-5" /> RuangKuis
         </div>
       </div>
+
 
       <div className="max-w-3xl mx-auto px-4 py-8">
         {/* Score Card */}

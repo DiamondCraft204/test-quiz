@@ -1,3 +1,4 @@
+const path = require('path');
 const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
 
@@ -8,7 +9,7 @@ const mammoth = require('mammoth');
  */
 const parsePDF = async (buffer) => {
   const data = await pdfParse(buffer);
-  return data.text.trim();
+  return data.text ? data.text.trim() : '';
 };
 
 /**
@@ -18,28 +19,34 @@ const parsePDF = async (buffer) => {
  */
 const parseWord = async (buffer) => {
   const result = await mammoth.extractRawText({ buffer });
-  return result.value.trim();
+  return result.value ? result.value.trim() : '';
 };
 
 /**
  * Auto-detect file type and parse accordingly.
+ * Supports detection by mimetype and file extension fallback.
  * @param {Buffer} buffer
  * @param {string} mimetype
+ * @param {string} originalname
  * @returns {Promise<string>}
  */
-const parseFile = async (buffer, mimetype) => {
-  const SUPPORTED = {
-    'application/pdf': parsePDF,
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': parseWord,
-    'application/msword': parseWord,
-  };
+const parseFile = async (buffer, mimetype, originalname = '') => {
+  const ext = path.extname(originalname || '').toLowerCase();
 
-  const parser = SUPPORTED[mimetype];
-  if (!parser) {
-    throw new Error(`Tipe file tidak didukung: ${mimetype}. Gunakan PDF atau Word (.doc/.docx).`);
+  if (mimetype === 'application/pdf' || ext === '.pdf') {
+    return parsePDF(buffer);
   }
 
-  return parser(buffer);
+  if (
+    mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    mimetype === 'application/msword' ||
+    ext === '.docx' ||
+    ext === '.doc'
+  ) {
+    return parseWord(buffer);
+  }
+
+  throw new Error(`Tipe file tidak didukung: ${originalname || mimetype}. Silakan unggah file PDF atau Word (.doc/.docx).`);
 };
 
 module.exports = { parsePDF, parseWord, parseFile };

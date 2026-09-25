@@ -6,9 +6,9 @@ const router = express.Router();
 
 // ─── GET /api/quiz ─────────────────────────────────────────────────────────
 // List all published quizzes (auth optional)
-router.get('/', (req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
-    const quizzes = db.prepare(`
+    const result = await db.query(`
       SELECT q.id, q.title, q.description, q.num_questions, q.timer_minutes,
              q.difficulty, q.question_types, q.created_at,
              COUNT(qs.id) AS question_count
@@ -17,28 +17,29 @@ router.get('/', (req, res, next) => {
       WHERE q.is_published = 1
       GROUP BY q.id
       ORDER BY q.created_at DESC
-    `).all();
+    `);
 
-    return res.json({ success: true, data: quizzes });
+    return res.json({ success: true, data: result.rows });
   } catch (err) {
     next(err);
   }
 });
 
 // ─── GET /api/quiz/submissions/my ─────────────────────────────────────────
-// Must come BEFORE /:id to avoid "submissions" being caught as an id param
-router.get('/submissions/my', authenticateUser, (req, res, next) => {
+// List user's own submissions
+router.get('/submissions/my', authenticateUser, async (req, res, next) => {
   try {
-    const submissions = db.prepare(`
-      SELECT s.id, s.quiz_id, s.score, s.total_questions, s.correct_count,
-             s.time_taken, s.submitted_at, q.title AS quiz_title
-      FROM submissions s
-      JOIN quizzes q ON q.id = s.quiz_id
-      WHERE s.user_id = ?
-      ORDER BY s.submitted_at DESC
-    `).all(req.user.id);
+    const result = await db.query(
+      `SELECT s.id, s.quiz_id, s.score, s.total_questions, s.correct_count,
+              s.time_taken, s.submitted_at, q.title AS quiz_title
+       FROM submissions s
+       JOIN quizzes q ON q.id = s.quiz_id
+       WHERE s.user_id = $1
+       ORDER BY s.submitted_at DESC`,
+      [req.user.id]
+    );
 
-    return res.json({ success: true, data: submissions });
+    return res.json({ success: true, data: result.rows });
   } catch (err) {
     next(err);
   }
@@ -46,34 +47,43 @@ router.get('/submissions/my', authenticateUser, (req, res, next) => {
 
 // ─── GET /api/quiz/submissions/:id ────────────────────────────────────────
 // Get a specific submission (user must own it)
-router.get('/submissions/:id', authenticateUser, (req, res, next) => {
+router.get('/submissions/:id', authenticateUser, async (req, res, next) => {
   try {
-    const submission = db.prepare(`
-      SELECT s.*, q.title AS quiz_title
-      FROM submissions s
-      JOIN quizzes q ON q.id = s.quiz_id
-      WHERE s.id = ?
-    `).get(req.params.id);
+    const subRes = await db.query(
+      `SELECT s.*, q.title AS quiz_title
+       FROM submissions s
+       JOIN quizzes q ON q.id = s.quiz_id
+       WHERE s.id = $1`,
+      [req.params.id]
+    );
 
-    if (!submission) {
+    if (subRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Submission tidak ditemukan.' });
     }
+
+    const submission = subRes.rows[0];
 
     if (submission.user_id !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Anda tidak memiliki akses ke submission ini.' });
     }
 
     // Fetch questions WITH answers (for result display)
-    const questions = db.prepare(
-      'SELECT id, type, text, options, correct_answer, explanation FROM questions WHERE quiz_id = ? ORDER BY order_num'
-    ).all(submission.quiz_id);
+    const qRes = await db.query(
+      'SELECT id, type, text, options, correct_answer, explanation FROM questions WHERE quiz_id = $1 ORDER BY order_num ASC',
+      [submission.quiz_id]
+    );
 
-    const parsedAnswers = JSON.parse(submission.answers || '[]');
+    const questions = qRes.rows;
+    let parsedAnswers = [];
+    try {
+      parsedAnswers = typeof submission.answers === 'string' ? JSON.parse(submission.answers) : submission.answers;
+    } catch {
+      parsedAnswers = [];
+    }
 
-    // Enrich answers with questionText (in case stored answers don't have it)
     const questionMap = {};
-    questions.forEach(q => { questionMap[q.id] = q; });
-    const enrichedAnswers = parsedAnswers.map(a => ({
+    questions.forEach((q) => { questionMap[q.id] = q; });
+    const enrichedAnswers = parsedAnswers.map((a) => ({
       ...a,
       questionText: a.questionText || questionMap[a.questionId]?.text || '',
       correctAnswer: a.correctAnswer || questionMap[a.questionId]?.correct_answer || '',
@@ -84,7 +94,15 @@ router.get('/submissions/:id', authenticateUser, (req, res, next) => {
       success: true,
       data: {
         submission: { ...submission, answers: enrichedAnswers },
-        questions: questions.map(q => ({ ...q, options: q.options ? JSON.parse(q.options) : null })),
+        questions: questions.map((q) => {
+          let opts = null;
+          try {
+            opts = q.options ? (typeof q.options === 'string' ? JSON.parse(q.options) : q.options) : null;
+          } catch {
+            opts = null;
+          }
+          return { ...q, options: opts };
+        }),
       },
     });
   } catch (err) {
@@ -92,40 +110,54 @@ router.get('/submissions/:id', authenticateUser, (req, res, next) => {
   }
 });
 
-
 // ─── GET /api/quiz/:id ─────────────────────────────────────────────────────
 // Get quiz info + questions WITHOUT correct_answer and explanation (requires auth)
-router.get('/:id', authenticateUser, (req, res, next) => {
+router.get('/:id', authenticateUser, async (req, res, next) => {
   try {
-    const quiz = db.prepare(`
-      SELECT id, title, description, num_questions, timer_minutes,
-             difficulty, question_types, is_published, created_at
-      FROM quizzes
-      WHERE id = ? AND is_published = 1
-    `).get(req.params.id);
+    const quizRes = await db.query(
+      `SELECT id, title, description, num_questions, timer_minutes,
+              difficulty, question_types, is_published, created_at
+       FROM quizzes
+       WHERE id = $1 AND is_published = 1`,
+      [req.params.id]
+    );
 
-    if (!quiz) {
+    if (quizRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Kuis tidak ditemukan atau belum dipublikasikan.' });
     }
 
-    // Strip correct answers and explanations from questions
-    const questions = db.prepare(`
-      SELECT id, quiz_id, type, text, options, order_num
-      FROM questions
-      WHERE quiz_id = ?
-      ORDER BY order_num
-    `).all(quiz.id);
+    const quiz = quizRes.rows[0];
 
-    // Parse options JSON for each question
-    const parsedQuestions = questions.map((q) => ({
-      ...q,
-      options: q.options ? JSON.parse(q.options) : null,
-    }));
+    // Strip correct answers and explanations from questions
+    const qRes = await db.query(
+      `SELECT id, quiz_id, type, text, options, order_num
+       FROM questions
+       WHERE quiz_id = $1
+       ORDER BY order_num ASC`,
+      [quiz.id]
+    );
+
+    const parsedQuestions = qRes.rows.map((q) => {
+      let opts = null;
+      try {
+        opts = q.options ? (typeof q.options === 'string' ? JSON.parse(q.options) : q.options) : null;
+      } catch {
+        opts = null;
+      }
+      return { ...q, options: opts };
+    });
+
+    let qTypes = [];
+    try {
+      qTypes = typeof quiz.question_types === 'string' ? JSON.parse(quiz.question_types) : quiz.question_types;
+    } catch {
+      qTypes = [];
+    }
 
     return res.json({
       success: true,
       data: {
-        quiz: { ...quiz, question_types: JSON.parse(quiz.question_types || '[]') },
+        quiz: { ...quiz, question_types: qTypes },
         questions: parsedQuestions,
       },
     });
@@ -136,7 +168,7 @@ router.get('/:id', authenticateUser, (req, res, next) => {
 
 // ─── POST /api/quiz/:id/submit ─────────────────────────────────────────────
 // Submit answers, auto-grade pilihan_ganda and benar_salah, defer essay
-router.post('/:id/submit', authenticateUser, (req, res, next) => {
+router.post('/:id/submit', authenticateUser, async (req, res, next) => {
   try {
     const { answers, timeTaken } = req.body;
 
@@ -144,18 +176,21 @@ router.post('/:id/submit', authenticateUser, (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Field answers (array) wajib diisi.' });
     }
 
-    const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ? AND is_published = 1').get(req.params.id);
-    if (!quiz) {
+    const quizRes = await db.query('SELECT * FROM quizzes WHERE id = $1 AND is_published = 1', [req.params.id]);
+    if (quizRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Kuis tidak ditemukan atau belum dipublikasikan.' });
     }
 
+    const quiz = quizRes.rows[0];
+
     // Fetch all questions WITH correct answers for grading
-    const questions = db.prepare('SELECT * FROM questions WHERE quiz_id = ?').all(quiz.id);
+    const qRes = await db.query('SELECT * FROM questions WHERE quiz_id = $1', [quiz.id]);
+    const questions = qRes.rows;
     const questionMap = {};
     questions.forEach((q) => { questionMap[q.id] = q; });
 
     let correctCount = 0;
-    let gradableCount = 0; // pilihan_ganda + benar_salah only
+    let gradableCount = 0;
 
     const gradedAnswers = answers.map((a) => {
       const question = questionMap[a.questionId];
@@ -168,11 +203,9 @@ router.post('/:id/submit', authenticateUser, (req, res, next) => {
       let needsReview = false;
 
       if (isEssay) {
-        // Essay: defer to manual review
         needsReview = true;
         isCorrect = false;
       } else {
-        // Auto-grade: normalize both sides for comparison
         const userAnswer = (a.answer || '').trim().toLowerCase();
         const correctAnswer = (question.correct_answer || '').trim().toLowerCase();
         isCorrect = userAnswer === correctAnswer;
@@ -192,27 +225,25 @@ router.post('/:id/submit', authenticateUser, (req, res, next) => {
       };
     });
 
-    // Score = (correct auto-graded) / (total auto-gradable questions) * 100
-    // If there are no auto-gradable questions (all essay), score = 0 pending review
     const totalQuestions = questions.length;
     const score = gradableCount > 0 ? (correctCount / totalQuestions) * 100 : 0;
 
-    // Save submission
-    const stmt = db.prepare(`
-      INSERT INTO submissions (quiz_id, user_id, answers, score, total_questions, correct_count, time_taken)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-    const result = stmt.run(
-      quiz.id,
-      req.user.id,
-      JSON.stringify(gradedAnswers),
-      Math.round(score * 100) / 100,
-      totalQuestions,
-      correctCount,
-      timeTaken ? parseInt(timeTaken, 10) : null
+    const subInsert = await db.query(
+      `INSERT INTO submissions (quiz_id, user_id, answers, score, total_questions, correct_count, time_taken)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [
+        quiz.id,
+        req.user.id,
+        JSON.stringify(gradedAnswers),
+        Math.round(score * 100) / 100,
+        totalQuestions,
+        correctCount,
+        timeTaken ? parseInt(timeTaken, 10) : null,
+      ]
     );
 
-    const submission = db.prepare('SELECT * FROM submissions WHERE id = ?').get(result.lastInsertRowid);
+    const submission = subInsert.rows[0];
 
     return res.status(201).json({
       success: true,
