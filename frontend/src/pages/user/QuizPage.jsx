@@ -48,20 +48,93 @@ function Timer({ minutes, onExpire, quizId }) {
 export default function QuizPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+
+  // Key for storing live progress in localStorage
+  const progressKey = `quiz_progress_${id}`
+
+  // Retrieve saved progress from localStorage on initial load
+  const getSavedProgress = useCallback(() => {
+    try {
+      const data = localStorage.getItem(`quiz_progress_${id}`)
+      return data ? JSON.parse(data) : null
+    } catch {
+      return null
+    }
+  }, [id])
+
+  const initialDraft = useRef(getSavedProgress())
+
   const [quiz, setQuiz] = useState(null)
   const [questions, setQuestions] = useState([])
-  const [answers, setAnswers] = useState({})
-  const [current, setCurrent] = useState(0)
+  const [answers, setAnswers] = useState(() => initialDraft.current?.answers || {})
+  const [current, setCurrent] = useState(() => initialDraft.current?.current || 0)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
-  const startTimeRef = useRef(Date.now())
+  const [restoredNotice, setRestoredNotice] = useState(() => {
+    const draft = initialDraft.current
+    return !!(draft && (Object.keys(draft.answers || {}).length > 0 || (draft.cheatViolations || 0) > 0))
+  })
 
-  // Anti-cheat state
-  const [cheatViolations, setCheatViolations] = useState(0)
-  const [cheatWarningModal, setCheatWarningModal] = useState(false)
-  const [warningMessage, setWarningMessage] = useState('')
+  const startTimeRef = useRef(
+    initialDraft.current?.startTime ||
+    parseInt(localStorage.getItem(`quiz_start_${id}`), 10) ||
+    Date.now()
+  )
+
+  // Anti-cheat state: restored from storage to prevent evasion by reload
+  const [cheatViolations, setCheatViolations] = useState(() => initialDraft.current?.cheatViolations || 0)
+  const [cheatWarningModal, setCheatWarningModal] = useState(() => !!initialDraft.current?.warningActive)
+  const [warningMessage, setWarningMessage] = useState(() => initialDraft.current?.warningMessage || '')
   const lastViolationTime = useRef(0)
+
+  // Centralized helper to persist current progress
+  const saveProgress = useCallback((override = {}) => {
+    try {
+      const currentStored = (() => {
+        try {
+          const item = localStorage.getItem(`quiz_progress_${id}`)
+          return item ? JSON.parse(item) : {}
+        } catch {
+          return {}
+        }
+      })()
+
+      const toSave = {
+        ...currentStored,
+        answers,
+        current,
+        cheatViolations,
+        warningActive: cheatWarningModal,
+        warningMessage,
+        startTime: startTimeRef.current,
+        ...override,
+      }
+      localStorage.setItem(`quiz_progress_${id}`, JSON.stringify(toSave))
+    } catch (e) {
+      console.error('Gagal menyimpan progres kuis:', e)
+    }
+  }, [id, answers, current, cheatViolations, cheatWarningModal, warningMessage])
+
+  // Save whenever state changes once loaded
+  useEffect(() => {
+    if (!loading && quiz) {
+      saveProgress()
+    }
+  }, [answers, current, cheatViolations, cheatWarningModal, warningMessage, loading, quiz, saveProgress])
+
+  // Warn and save immediately on page reload or close
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (!submitting && questions.length > 0) {
+        saveProgress()
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [submitting, questions.length, saveProgress])
 
   const recordViolation = useCallback((reason) => {
     const now = Date.now()
@@ -71,13 +144,20 @@ export default function QuizPage() {
 
     setCheatViolations(prev => {
       const nextCount = prev + 1
-      setWarningMessage(
-        `Pelanggaran ke-${nextCount}: Anda terdeteksi ${reason}. Nilai ujian Anda dikurangi -5 poin untuk setiap pelanggaran! (Total Penalti: -${nextCount * 5} poin).`
-      )
+      const msg = `Pelanggaran ke-${nextCount}: Anda terdeteksi ${reason}. Nilai ujian Anda dikurangi -5 poin untuk setiap pelanggaran! (Total Penalti: -${nextCount * 5} poin).`
+      setWarningMessage(msg)
       setCheatWarningModal(true)
+
+      // Save immediately to ensure reload cannot erase violation
+      saveProgress({
+        cheatViolations: nextCount,
+        warningActive: true,
+        warningMessage: msg,
+      })
+
       return nextCount
     })
-  }, [])
+  }, [saveProgress])
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -103,19 +183,57 @@ export default function QuizPage() {
     try {
       const res = await api.get(`/quiz/${id}`)
       if (res.data.data.alreadySubmitted) {
+        localStorage.removeItem(`quiz_start_${id}`)
+        localStorage.removeItem(`quiz_progress_${id}`)
         alert('Anda sudah menyelesaikan kuis ini. Kuis hanya dapat dikerjakan 1 kali.')
         navigate(`/quiz/${id}/result/${res.data.data.submissionId}`)
         return
       }
       setQuiz(res.data.data.quiz)
-      setQuestions(res.data.data.questions)
+      const qList = res.data.data.questions || []
+      setQuestions(qList)
+
+      // Ensure current index is within bounds
+      if (initialDraft.current?.current && initialDraft.current.current >= qList.length) {
+        setCurrent(0)
+      }
     } catch { navigate('/quizzes') } finally { setLoading(false) }
   }, [id, navigate])
 
   useEffect(() => { fetchQuiz() }, [fetchQuiz])
 
   const setAnswer = (questionId, value) => {
-    setAnswers(a => ({ ...a, [questionId]: value }))
+    setAnswers(a => {
+      const next = { ...a, [questionId]: value }
+      saveProgress({ answers: next })
+      return next
+    })
+  }
+
+  const goToQuestion = (idx) => {
+    setCurrent(idx)
+    saveProgress({ current: idx })
+  }
+
+  const prevQuestion = () => {
+    setCurrent(c => {
+      const nextIdx = Math.max(0, c - 1)
+      saveProgress({ current: nextIdx })
+      return nextIdx
+    })
+  }
+
+  const nextQuestion = () => {
+    setCurrent(c => {
+      const nextIdx = Math.min(questions.length - 1, c + 1)
+      saveProgress({ current: nextIdx })
+      return nextIdx
+    })
+  }
+
+  const closeWarningModal = () => {
+    setCheatWarningModal(false)
+    saveProgress({ warningActive: false })
   }
 
   const handleSubmit = async () => {
@@ -130,6 +248,7 @@ export default function QuizPage() {
     try {
       const res = await api.post(`/quiz/${id}/submit`, payload)
       localStorage.removeItem(`quiz_start_${id}`)
+      localStorage.removeItem(`quiz_progress_${id}`)
       navigate(`/quiz/${id}/result/${res.data.data.submission.id}`)
     } catch (err) {
       alert(err.response?.data?.message || 'Gagal mengirim jawaban.')
@@ -188,6 +307,26 @@ export default function QuizPage() {
       </div>
 
       <div className="flex-1 max-w-3xl mx-auto px-4 py-8 w-full">
+        {/* Restored Session Notification */}
+        {restoredNotice && (
+          <div className="bg-indigo-50 border border-indigo-200 text-indigo-800 px-4 py-3 rounded-2xl text-xs font-semibold mb-6 flex items-center justify-between shadow-xs">
+            <span className="flex items-center gap-2">
+              <span className="text-base">💾</span>
+              <span>Sesi pengerjaan sebelumnya dipulihkan:</span>
+              <span className="font-bold text-indigo-900">{answeredCount} jawaban tersimpan</span>
+              {cheatViolations > 0 && (
+                <span className="text-red-600 font-bold ml-1">({cheatViolations}x pelanggaran tercatat)</span>
+              )}
+            </span>
+            <button
+              onClick={() => setRestoredNotice(false)}
+              className="text-indigo-400 hover:text-indigo-600 font-bold ml-2 px-2 py-0.5 rounded hover:bg-indigo-100"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Question number dots & Answered vs Unanswered navigation */}
         <div className="bg-white rounded-2xl border shadow-sm p-4 mb-6">
           <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-3 border-b text-xs">
@@ -211,7 +350,7 @@ export default function QuizPage() {
               return (
                 <button
                   key={i}
-                  onClick={() => setCurrent(i)}
+                  onClick={() => goToQuestion(i)}
                   className={`w-9 h-9 rounded-xl text-xs font-bold transition flex items-center justify-center relative ${
                     isCurrent
                       ? 'bg-indigo-600 text-white ring-2 ring-indigo-400 ring-offset-1 shadow-md'
@@ -302,13 +441,13 @@ export default function QuizPage() {
 
         {/* Navigation */}
         <div className="flex items-center justify-between">
-          <button onClick={() => setCurrent(c => Math.max(0, c - 1))} disabled={current === 0}
+          <button onClick={prevQuestion} disabled={current === 0}
             className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-100 transition disabled:opacity-40">
             <ChevronLeft className="w-4 h-4" /> Sebelumnya
           </button>
 
           {current < questions.length - 1 ? (
-            <button onClick={() => setCurrent(c => Math.min(questions.length - 1, c + 1))}
+            <button onClick={nextQuestion}
               className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition font-medium">
               Berikutnya <ChevronRight className="w-4 h-4" />
             </button>
@@ -378,7 +517,7 @@ export default function QuizPage() {
               ⚠️ Aturan Ujian: Dilarang berpindah tab, membuka jendela aplikasi lain, atau meninggalkan layar ujian. Setiap pelanggaran akan otomatis terekam dan mengurangi nilai Anda sebesar -5 poin!
             </div>
             <button
-              onClick={() => setCheatWarningModal(false)}
+              onClick={closeWarningModal}
               className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-xl transition shadow-md"
             >
               Saya Mengerti & Kembali ke Soal
