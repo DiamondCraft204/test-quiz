@@ -16,10 +16,15 @@ export default function UserLogin() {
   const redirectParam = searchParams.get('redirect')
   const isExpired = searchParams.get('expired')
 
-  const redirectPath = redirectParam
-    ? decodeURIComponent(redirectParam)
-    : location.state?.from?.pathname
+  const decodedRedirect = redirectParam ? decodeURIComponent(redirectParam) : ''
+  const stateRedirect = location.state?.from?.pathname
     ? location.state.from.pathname + (location.state.from.search || '')
+    : ''
+
+  const redirectPath = (decodedRedirect && decodedRedirect !== '/' && decodedRedirect !== '/landing' && !decodedRedirect.startsWith('/login'))
+    ? decodedRedirect
+    : (stateRedirect && stateRedirect !== '/' && stateRedirect !== '/landing' && !stateRedirect.startsWith('/login'))
+    ? stateRedirect
     : '/quizzes'
 
   const notice = location.state?.message || (isExpired ? 'Sesi login Anda telah berakhir. Silakan masuk kembali.' : '')

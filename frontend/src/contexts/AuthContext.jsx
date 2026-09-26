@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import api from '../api/axios'
 
 const AuthContext = createContext(null)
@@ -8,7 +8,7 @@ export function AuthProvider({ children }) {
     try { return JSON.parse(localStorage.getItem('user')) } catch { return null }
   })
   const [token, setToken] = useState(() => localStorage.getItem('token'))
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => !!localStorage.getItem('token'))
 
   const logout = useCallback(() => {
     localStorage.removeItem('token')

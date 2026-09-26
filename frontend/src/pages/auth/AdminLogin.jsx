@@ -11,7 +11,10 @@ export default function AdminLogin() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  const redirectPath = location.state?.from?.pathname || '/admin'
+  const stateRedirect = location.state?.from?.pathname
+  const redirectPath = (stateRedirect && stateRedirect !== '/' && stateRedirect !== '/landing' && !stateRedirect.startsWith('/admin/login'))
+    ? stateRedirect
+    : '/admin'
   const notice = location.state?.message || ''
 
   const handleSubmit = async (e) => {

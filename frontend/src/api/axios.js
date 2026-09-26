@@ -21,11 +21,15 @@ api.interceptors.response.use(
     if (error.response && error.response.status === 401) {
       localStorage.removeItem('token')
       localStorage.removeItem('user')
-      if (
-        !window.location.pathname.startsWith('/login') &&
-        !window.location.pathname.startsWith('/register') &&
-        !window.location.pathname.startsWith('/admin')
-      ) {
+      const path = window.location.pathname
+      const isPublicPath =
+        path === '/' ||
+        path === '/landing' ||
+        path.startsWith('/login') ||
+        path.startsWith('/register') ||
+        path.startsWith('/admin')
+
+      if (!isPublicPath) {
         const currentPath = window.location.pathname + window.location.search
         window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}&expired=1`
       }
