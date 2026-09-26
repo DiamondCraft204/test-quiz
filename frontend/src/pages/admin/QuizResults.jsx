@@ -107,6 +107,11 @@ export default function QuizResults() {
                       <div className="text-right hidden md:block">
                         <div className="text-sm text-gray-500">Benar: {sub.correct_count}/{sub.total_questions}</div>
                         <div className="text-xs text-gray-400">Waktu: {formatTime(sub.time_taken)}</div>
+                        {sub.cheat_violations > 0 && (
+                          <div className="text-xs text-red-600 font-semibold mt-0.5">
+                            Curang: {sub.cheat_violations}x (-{sub.cheat_violations * 5} poin)
+                          </div>
+                        )}
                       </div>
                       <div className="w-32">
                         <ScoreBar score={sub.score || 0} />

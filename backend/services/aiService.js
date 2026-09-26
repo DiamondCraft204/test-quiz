@@ -219,25 +219,27 @@ const evaluateEssayAnswers = async (essayItems) => {
     let feedback = '';
     let isCorrect = false;
 
-    if (matchRatio >= 0.8) {
+    if (matchRatio >= 0.75) {
       score = 100;
-      feedback = 'Jawaban sangat lengkap dan sesuai dengan kunci jawaban!';
+      feedback = 'Jawaban menjawab inti konsep secara tepat dan lengkap (Nilai Penuh)!';
       isCorrect = true;
-    } else if (matchRatio >= 0.6) {
-      score = 85;
-      feedback = 'Jawaban sangat mendekati dan memuat sebagian besar konsep utama.';
+    } else if (matchRatio >= 0.5) {
+      score = Math.round(70 + (matchRatio - 0.5) * 80); // 70 - 90
+      score = Math.min(90, Math.max(70, score));
+      feedback = 'Jawaban mendekati kunci jawaban dan memuat poin-poin utama.';
       isCorrect = true;
-    } else if (matchRatio >= 0.4) {
-      score = 70;
-      feedback = 'Jawaban mendekati beberapa poin penting yang diharapkan.';
-      isCorrect = 'partial';
     } else if (matchRatio >= 0.2) {
-      score = 50;
-      feedback = 'Jawaban mencakup sebagian kecil poin inti, namun masih perlu dilengkapi.';
+      score = Math.round(10 + (matchRatio - 0.2) * 200); // 10 - 70
+      score = Math.min(70, Math.max(10, score));
+      feedback = 'Jawaban masih kurang lengkap dan hanya menyinggung sebagian kecil poin inti.';
       isCorrect = 'partial';
+    } else if (userText.length > 0) {
+      score = Math.min(10, Math.max(1, Math.round(userText.length / 5))); // 1 - 10
+      feedback = 'Jawaban diisi apa adanya atau sangat minim.';
+      isCorrect = false;
     } else {
-      score = 25;
-      feedback = 'Jawaban kurang tepat atau belum mencakup poin-poin utama.';
+      score = 0;
+      feedback = 'Jawaban kosong.';
       isCorrect = false;
     }
 
@@ -253,16 +255,17 @@ const evaluateEssayAnswers = async (essayItems) => {
 
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const prompt = `Kamu adalah guru / penguji ujian yang adil dan objektif. Nilailah jawaban essay siswa berikut berdasarkan pertanyaan dan kunci jawaban/poin penting.
+    const prompt = `Kamu adalah guru / penguji ujian yang adil dan teliti. Nilailah jawaban essay siswa berikut berdasarkan pertanyaan dan kunci jawaban/poin penting.
 
-ATURAN PENILAIAN:
-- "score": Berikan nilai integer antara 0 sampai 100.
-  * 100 (Sempurna): Jika jawaban siswa SESUAI atau mencakup seluruh poin inti yang diminta (berikan nilai sempurna 100).
-  * 60 - 95 (Mendekati): Jika jawaban siswa MENDEKATI kunci jawaban atau memuat sebagian besar konsep utama yang benar, berikan nilai proporsional (misal 70, 75, 80, 85, 90).
-  * 25 - 55 (Kurang Lengkap): Jika hanya menyebutkan sedikit konsep yang benar.
-  * 0: Jika jawaban kosong, ngawur, atau sama sekali tidak relevan.
-- "feedback": Penjelasan singkat 1-2 kalimat dalam Bahasa Indonesia yang ramah dan konstruktif mengenai alasan nilai tersebut.
-- "isCorrect": true (jika score >= 70), "partial" (jika score antara 40-69), false (jika score < 40).
+ATURAN SKALA PENILAIAN WAJIB DIIKUTI:
+1. "score" (angka integer 0 - 100):
+   * 100 (Nilai Penuh): Jika siswa menjawab INTI dari jawaban dengan benar dan sesuai.
+   * 70 - 90 (Mendekati): Jika jawaban siswa MENDEKATI kunci jawaban dan memuat sebagian besar konsep penting.
+   * 10 - 70 (Kurang): Jika jawaban siswa KURANG lengkap, hanya menyebutkan sedikit konsep yang benar.
+   * 1 - 10 (Apa Adanya): Jika siswa HANYA MENGISI APA ADANYA, sangat minim, atau asal isi.
+   * 0 (Kosong/Ngawur): Jika jawaban kosong atau sama sekali tidak relevan.
+2. "feedback": Penjelasan singkat 1-2 kalimat dalam Bahasa Indonesia yang ramah mengenai alasan penilaian.
+3. "isCorrect": true (jika score >= 70), "partial" (jika score antara 10 - 69), false (jika score < 10).
 
 Daftar soal dan jawaban siswa yang harus dinilai:
 ${JSON.stringify(essayItems.map(item => ({

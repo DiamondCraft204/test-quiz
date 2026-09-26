@@ -103,8 +103,13 @@ const initDB = async () => {
       total_questions INT DEFAULT 0,
       correct_count INT DEFAULT 0,
       time_taken INT,
+      cheat_violations INT DEFAULT 0,
       submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS session_token TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+    ALTER TABLE submissions ADD COLUMN IF NOT EXISTS cheat_violations INT DEFAULT 0;
   `;
 
   try {

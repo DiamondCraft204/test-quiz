@@ -129,6 +129,14 @@ router.get('/:id', authenticateUser, async (req, res, next) => {
 
     const quiz = quizRes.rows[0];
 
+    // Check if user has already submitted this quiz
+    const existingSub = await db.query(
+      'SELECT id FROM submissions WHERE quiz_id = $1 AND user_id = $2',
+      [quiz.id, req.user.id]
+    );
+    const alreadySubmitted = existingSub.rows.length > 0;
+    const submissionId = alreadySubmitted ? existingSub.rows[0].id : null;
+
     // Strip correct answers and explanations from questions
     const qRes = await db.query(
       `SELECT id, quiz_id, type, text, options, order_num
@@ -160,6 +168,8 @@ router.get('/:id', authenticateUser, async (req, res, next) => {
       data: {
         quiz: { ...quiz, question_types: qTypes },
         questions: parsedQuestions,
+        alreadySubmitted,
+        submissionId,
       },
     });
   } catch (err) {
@@ -168,10 +178,10 @@ router.get('/:id', authenticateUser, async (req, res, next) => {
 });
 
 // ─── POST /api/quiz/:id/submit ─────────────────────────────────────────────
-// Submit answers, auto-grade pilihan_ganda, benar_salah, and evaluate essay
+// Submit answers, auto-grade pilihan_ganda, benar_salah, evaluate essay, and apply anti-cheat penalty
 router.post('/:id/submit', authenticateUser, async (req, res, next) => {
   try {
-    const { answers, timeTaken } = req.body;
+    const { answers, timeTaken, cheatViolations = 0 } = req.body;
 
     if (!answers || !Array.isArray(answers)) {
       return res.status(400).json({ success: false, message: 'Field answers (array) wajib diisi.' });
@@ -183,6 +193,20 @@ router.post('/:id/submit', authenticateUser, async (req, res, next) => {
     }
 
     const quiz = quizRes.rows[0];
+
+    // Single attempt enforcement: User cannot take the quiz twice
+    const existingSub = await db.query(
+      'SELECT id FROM submissions WHERE quiz_id = $1 AND user_id = $2',
+      [quiz.id, req.user.id]
+    );
+    if (existingSub.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        code: 'ALREADY_SUBMITTED',
+        message: 'Anda sudah menyelesaikan kuis ini dan tidak dapat mengerjakan ulang (hanya 1x pengerjaan).',
+        submissionId: existingSub.rows[0].id,
+      });
+    }
 
     // Fetch all questions WITH correct answers for grading
     const qRes = await db.query('SELECT * FROM questions WHERE quiz_id = $1', [quiz.id]);
@@ -229,7 +253,7 @@ router.post('/:id/submit', authenticateUser, async (req, res, next) => {
         const score = Math.max(0, Math.min(100, Math.round(evalRes.score || 0)));
         const questionPoints = score / 100; // 0.0 to 1.0
         earnedPoints += questionPoints;
-        if (score >= 80) fullCorrectCount++;
+        if (score >= 70) fullCorrectCount++;
 
         return {
           questionId: a.questionId,
@@ -267,11 +291,16 @@ router.post('/:id/submit', authenticateUser, async (req, res, next) => {
     });
 
     const totalQuestions = questions.length || answers.length || 1;
-    const finalScore = Math.round(((earnedPoints / totalQuestions) * 100) * 10) / 10;
+    const baseScore = (earnedPoints / totalQuestions) * 100;
+
+    // Anti-cheat penalty: -5 points per violation
+    const violationCount = Math.max(0, parseInt(cheatViolations, 10) || 0);
+    const penaltyPoints = violationCount * 5;
+    const finalScore = Math.max(0, Math.round((baseScore - penaltyPoints) * 10) / 10);
 
     const subInsert = await db.query(
-      `INSERT INTO submissions (quiz_id, user_id, answers, score, total_questions, correct_count, time_taken)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO submissions (quiz_id, user_id, answers, score, total_questions, correct_count, time_taken, cheat_violations)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
       [
         quiz.id,
@@ -281,6 +310,7 @@ router.post('/:id/submit', authenticateUser, async (req, res, next) => {
         totalQuestions,
         fullCorrectCount,
         timeTaken ? parseInt(timeTaken, 10) : null,
+        violationCount,
       ]
     );
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../../api/axios'
-import { GraduationCap, Clock, ChevronLeft, ChevronRight, Send, AlertCircle, Loader2 } from 'lucide-react'
+import { GraduationCap, Clock, ChevronLeft, ChevronRight, Send, AlertCircle, Loader2, AlertTriangle, ShieldAlert } from 'lucide-react'
 
 function Timer({ minutes, onExpire, quizId }) {
   const startKey = `quiz_start_${quizId}`
@@ -57,9 +57,56 @@ export default function QuizPage() {
   const [showConfirm, setShowConfirm] = useState(false)
   const startTimeRef = useRef(Date.now())
 
+  // Anti-cheat state
+  const [cheatViolations, setCheatViolations] = useState(0)
+  const [cheatWarningModal, setCheatWarningModal] = useState(false)
+  const [warningMessage, setWarningMessage] = useState('')
+  const lastViolationTime = useRef(0)
+
+  const recordViolation = useCallback((reason) => {
+    const now = Date.now()
+    // Debounce to prevent duplicate triggers within 2 seconds
+    if (now - lastViolationTime.current < 2000) return
+    lastViolationTime.current = now
+
+    setCheatViolations(prev => {
+      const nextCount = prev + 1
+      setWarningMessage(
+        `Pelanggaran ke-${nextCount}: Anda terdeteksi ${reason}. Nilai ujian Anda dikurangi -5 poin untuk setiap pelanggaran! (Total Penalti: -${nextCount * 5} poin).`
+      )
+      setCheatWarningModal(true)
+      return nextCount
+    })
+  }, [])
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        recordViolation('berpindah tab atau me-minimize browser')
+      }
+    }
+
+    const handleWindowBlur = () => {
+      recordViolation('keluar dari jendela ujian atau membuka aplikasi lain')
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('blur', handleWindowBlur)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('blur', handleWindowBlur)
+    }
+  }, [recordViolation])
+
   const fetchQuiz = useCallback(async () => {
     try {
       const res = await api.get(`/quiz/${id}`)
+      if (res.data.data.alreadySubmitted) {
+        alert('Anda sudah menyelesaikan kuis ini. Kuis hanya dapat dikerjakan 1 kali.')
+        navigate(`/quiz/${id}/result/${res.data.data.submissionId}`)
+        return
+      }
       setQuiz(res.data.data.quiz)
       setQuestions(res.data.data.questions)
     } catch { navigate('/quizzes') } finally { setLoading(false) }
@@ -78,6 +125,7 @@ export default function QuizPage() {
     const payload = {
       answers: questions.map(q => ({ questionId: q.id, answer: answers[q.id] || '' })),
       timeTaken,
+      cheatViolations,
     }
     try {
       const res = await api.post(`/quiz/${id}/submit`, payload)
@@ -96,7 +144,7 @@ export default function QuizPage() {
   )
 
   const q = questions[current]
-  const answeredCount = Object.keys(answers).filter(k => answers[k] !== '').length
+  const answeredCount = Object.keys(answers).filter(k => answers[k] && String(answers[k]).trim() !== '').length
   let options = []
   if (Array.isArray(q?.options)) {
     options = q.options
@@ -105,7 +153,12 @@ export default function QuizPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div
+      className="min-h-screen bg-gray-50 flex flex-col select-none"
+      onContextMenu={e => e.preventDefault()}
+      onCopy={e => e.preventDefault()}
+      onPaste={e => e.preventDefault()}
+    >
       {/* Topbar */}
       <div className="bg-white shadow-sm border-b sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -114,6 +167,15 @@ export default function QuizPage() {
             <span className="hidden sm:block">{quiz?.title}</span>
           </div>
           <div className="flex items-center gap-3">
+            {cheatViolations > 0 ? (
+              <span className="flex items-center gap-1.5 text-xs font-bold text-red-700 bg-red-100 border border-red-200 px-3 py-1.5 rounded-full animate-pulse">
+                <ShieldAlert className="w-3.5 h-3.5" /> {cheatViolations}x Curang (-{cheatViolations * 5} poin)
+              </span>
+            ) : (
+              <span className="hidden sm:flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
+                🛡️ Anti-Cheat Aktif
+              </span>
+            )}
             <span className="text-sm text-gray-500">{answeredCount}/{questions.length} dijawab</span>
             {quiz?.timer_minutes && <Timer minutes={quiz.timer_minutes} onExpire={handleSubmit} quizId={id} />}
           </div>
@@ -126,18 +188,46 @@ export default function QuizPage() {
       </div>
 
       <div className="flex-1 max-w-3xl mx-auto px-4 py-8 w-full">
-        {/* Question number dots */}
-        <div className="flex flex-wrap gap-1.5 mb-6">
-          {questions.map((q, i) => (
-            <button key={i} onClick={() => setCurrent(i)}
-              className={`w-8 h-8 rounded-full text-xs font-semibold transition ${
-                i === current ? 'bg-indigo-600 text-white' :
-                answers[q.id] ? 'bg-green-100 text-green-700 border border-green-300' :
-                'bg-gray-100 text-gray-500 hover:bg-gray-200'
-              }`}>
-              {i + 1}
-            </button>
-          ))}
+        {/* Question number dots & Answered vs Unanswered navigation */}
+        <div className="bg-white rounded-2xl border shadow-sm p-4 mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-3 border-b text-xs">
+            <div className="flex items-center gap-4">
+              <span className="flex items-center gap-1.5 font-medium text-emerald-700">
+                <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span>
+                Sudah dijawab: <b className="text-emerald-800">{answeredCount}</b>
+              </span>
+              <span className="flex items-center gap-1.5 font-medium text-gray-500">
+                <span className="w-3 h-3 rounded-full bg-gray-200 border border-gray-300 inline-block"></span>
+                Belum dijawab: <b className="text-gray-700">{questions.length - answeredCount}</b>
+              </span>
+            </div>
+            <span className="text-gray-400 hidden sm:inline">Klik nomor untuk berpindah soal</span>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {questions.map((qItem, i) => {
+              const isAnswered = answers[qItem.id] && String(answers[qItem.id]).trim() !== ''
+              const isCurrent = i === current
+              return (
+                <button
+                  key={i}
+                  onClick={() => setCurrent(i)}
+                  className={`w-9 h-9 rounded-xl text-xs font-bold transition flex items-center justify-center relative ${
+                    isCurrent
+                      ? 'bg-indigo-600 text-white ring-2 ring-indigo-400 ring-offset-1 shadow-md'
+                      : isAnswered
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
+                  }`}
+                >
+                  {i + 1}
+                  {isAnswered && !isCurrent && (
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-white"></span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
         </div>
 
         {/* Question Card */}
@@ -204,7 +294,7 @@ export default function QuizPage() {
                   className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-400 resize-none text-gray-800"
                   placeholder="Tulis jawaban kamu di sini..."
                 />
-                <p className="text-xs text-gray-400 mt-1">Jawaban essay tidak dihitung otomatis, akan direview oleh admin.</p>
+                <p className="text-xs text-indigo-600 mt-2 font-medium">💡 Jawaban essay dinilai otomatis berdasarkan ketepatan dan kelengkapan inti jawaban.</p>
               </div>
             )}
           </div>
@@ -224,7 +314,7 @@ export default function QuizPage() {
             </button>
           ) : (
             <button onClick={() => setShowConfirm(true)} disabled={submitting}
-              className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition font-semibold">
+              className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition font-semibold shadow-md">
               {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               Kumpulkan
             </button>
@@ -233,9 +323,9 @@ export default function QuizPage() {
 
         {/* Unanswered warning */}
         {answeredCount < questions.length && (
-          <div className="mt-4 flex items-center gap-2 bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-2.5 rounded-lg text-sm">
+          <div className="mt-4 flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2.5 rounded-xl text-sm">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            {questions.length - answeredCount} soal belum dijawab
+            <span><b>{questions.length - answeredCount}</b> dari {questions.length} soal belum dijawab.</span>
           </div>
         )}
       </div>
@@ -250,20 +340,49 @@ export default function QuizPage() {
               Kamu sudah menjawab <span className="font-semibold text-gray-700">{answeredCount}</span> dari <span className="font-semibold text-gray-700">{questions.length}</span> soal.
             </p>
             {answeredCount < questions.length && (
-              <p className="text-yellow-600 text-sm mb-4 bg-yellow-50 px-3 py-2 rounded-lg">
-                ⚠️ {questions.length - answeredCount} soal masih kosong
+              <p className="text-amber-700 text-xs mb-2 bg-amber-50 px-3 py-2 rounded-lg font-medium border border-amber-200">
+                ⚠️ {questions.length - answeredCount} soal masih belum dijawab
+              </p>
+            )}
+            {cheatViolations > 0 && (
+              <p className="text-red-700 text-xs mb-3 bg-red-50 px-3 py-2 rounded-lg font-semibold border border-red-200">
+                ⚠️ Terdeteksi {cheatViolations}x pelanggaran keluar halaman (Penalti: -{cheatViolations * 5} poin)
               </p>
             )}
             <div className="flex gap-3 mt-4">
               <button onClick={() => setShowConfirm(false)}
-                className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-lg hover:bg-gray-50 transition">
+                className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-xl hover:bg-gray-50 transition font-medium">
                 Kembali
               </button>
               <button onClick={handleSubmit}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg font-semibold transition">
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-xl font-semibold transition shadow-md">
                 Ya, Kumpulkan
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Anti-cheat Violation Warning Modal */}
+      {cheatWarningModal && (
+        <div className="fixed inset-0 bg-red-950/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 text-center border-2 border-red-500">
+            <div className="w-14 h-14 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-3">
+              <AlertTriangle className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-extrabold text-red-700 mb-2">Peringatan Pelanggaran!</h3>
+            <p className="text-gray-700 text-sm mb-4 leading-relaxed font-medium">
+              {warningMessage}
+            </p>
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-5 text-xs text-red-800 font-semibold text-left">
+              ⚠️ Aturan Ujian: Dilarang berpindah tab, membuka jendela aplikasi lain, atau meninggalkan layar ujian. Setiap pelanggaran akan otomatis terekam dan mengurangi nilai Anda sebesar -5 poin!
+            </div>
+            <button
+              onClick={() => setCheatWarningModal(false)}
+              className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-xl transition shadow-md"
+            >
+              Saya Mengerti & Kembali ke Soal
+            </button>
           </div>
         </div>
       )}

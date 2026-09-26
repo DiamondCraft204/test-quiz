@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../../api/axios'
-import { GraduationCap, CheckCircle, XCircle, MessageSquare, ArrowLeft, Trophy, Clock, Loader2 } from 'lucide-react'
+import { GraduationCap, CheckCircle, XCircle, MessageSquare, ArrowLeft, Trophy, Clock, Loader2, AlertTriangle } from 'lucide-react'
 
 function ScoreCircle({ score }) {
   const r = 54
@@ -92,6 +92,21 @@ export default function ResultPage() {
           </div>
         </div>
 
+        {/* Anti-cheat Penalty Banner */}
+        {submission?.cheat_violations > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-6 flex items-center gap-3 text-red-800">
+            <div className="w-10 h-10 bg-red-100 text-red-600 rounded-xl flex items-center justify-center flex-shrink-0">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="font-bold text-sm">Penalti Kecurangan: -{submission.cheat_violations * 5} Poin</p>
+              <p className="text-xs text-red-600 mt-0.5">
+                Terdeteksi berpindah tab/keluar halaman sebanyak <b>{submission.cheat_violations} kali</b> selama ujian. Skor akhir telah dipotong sebesar {submission.cheat_violations * 5} poin.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Per Question Review */}
         <h2 className="text-xl font-bold text-gray-800 mb-4">Pembahasan Soal</h2>
         <div className="space-y-4">
@@ -107,8 +122,8 @@ export default function ResultPage() {
             const essayScore = a.score !== undefined ? a.score : null
             let status = 'wrong'
             if (isEssay) {
-              if (essayScore >= 80) status = 'correct'
-              else if (essayScore >= 40) status = 'partial'
+              if (essayScore >= 70) status = 'correct'
+              else if (essayScore >= 10) status = 'partial'
               else status = 'wrong'
             } else {
               status = a.isCorrect ? 'correct' : 'wrong'
@@ -169,10 +184,10 @@ export default function ResultPage() {
                         <span className={`text-xs font-bold px-3 py-1 rounded-full ${
                           (a.score ?? 0) === 100 ? 'bg-green-100 text-green-800' :
                           (a.score ?? 0) >= 70 ? 'bg-blue-100 text-blue-800' :
-                          (a.score ?? 0) >= 40 ? 'bg-amber-100 text-amber-800' :
+                          (a.score ?? 0) >= 10 ? 'bg-amber-100 text-amber-800' :
                           'bg-red-100 text-red-800'
                         }`}>
-                          Nilai: {a.score ?? 0}/100 {(a.score ?? 0) === 100 ? '⭐ Sempurna' : (a.score ?? 0) >= 60 ? '👍 Mendekati' : ''}
+                          Nilai: {a.score ?? 0}/100 {(a.score ?? 0) === 100 ? '⭐ Nilai Penuh' : (a.score ?? 0) >= 70 ? '👍 Mendekati' : (a.score ?? 0) >= 10 ? '⚠️ Kurang Lengkap' : '❌ Apa Adanya'}
                         </span>
                       </div>
 
