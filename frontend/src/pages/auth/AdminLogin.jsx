@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { adminApi } from '../../api/axios'
-import { GraduationCap, Shield, Loader2, Eye, EyeOff } from 'lucide-react'
+import { GraduationCap, Shield, Loader2, Eye, EyeOff, ShieldAlert } from 'lucide-react'
 
 export default function AdminLogin() {
   const [password, setPassword] = useState('')
@@ -9,6 +9,10 @@ export default function AdminLogin() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+  const location = useLocation()
+
+  const redirectPath = location.state?.from?.pathname || '/admin'
+  const notice = location.state?.message || ''
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -18,7 +22,7 @@ export default function AdminLogin() {
       const res = await adminApi.post('/auth/admin/login', { password })
       const token = res.data.data.token
       localStorage.setItem('adminToken', token)
-      navigate('/admin')
+      navigate(redirectPath, { replace: true })
     } catch (err) {
       setError(err.response?.data?.message || 'Password admin salah.')
     } finally {
@@ -29,7 +33,7 @@ export default function AdminLogin() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-indigo-900 to-purple-900 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <div className="flex items-center justify-center gap-2 text-indigo-600 mb-3">
             <GraduationCap className="w-8 h-8" />
             <span className="text-2xl font-bold">RuangKuis</span>
@@ -40,6 +44,13 @@ export default function AdminLogin() {
           <h2 className="text-2xl font-bold text-gray-800">Masuk Admin</h2>
           <p className="text-gray-500 text-sm mt-1">Masukkan password admin untuk mengakses panel</p>
         </div>
+
+        {notice && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-xl mb-4 text-xs font-semibold flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-amber-600 flex-shrink-0" />
+            <span>{notice}</span>
+          </div>
+        )}
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">
@@ -71,8 +82,9 @@ export default function AdminLogin() {
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-400 mt-6">
-          <Link to="/" className="hover:underline">← Kembali ke beranda</Link>
+        <p className="text-center text-sm text-gray-500 mt-6">
+          Bukan admin?{' '}
+          <Link to="/login" className="text-indigo-600 hover:underline font-medium">Masuk sebagai Peserta</Link>
         </p>
       </div>
     </div>

@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { GraduationCap, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { GraduationCap, Eye, EyeOff, Loader2, ShieldAlert } from 'lucide-react'
 
 export default function UserLogin() {
   const [form, setForm] = useState({ email: '', password: '' })
@@ -10,6 +10,19 @@ export default function UserLogin() {
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
+
+  const redirectParam = searchParams.get('redirect')
+  const isExpired = searchParams.get('expired')
+
+  const redirectPath = redirectParam
+    ? decodeURIComponent(redirectParam)
+    : location.state?.from?.pathname
+    ? location.state.from.pathname + (location.state.from.search || '')
+    : '/quizzes'
+
+  const notice = location.state?.message || (isExpired ? 'Sesi login Anda telah berakhir. Silakan masuk kembali.' : '')
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -17,7 +30,7 @@ export default function UserLogin() {
     setLoading(true)
     try {
       await login(form.email, form.password)
-      navigate('/quizzes')
+      navigate(redirectPath, { replace: true })
     } catch (err) {
       setError(err.response?.data?.message || 'Login gagal. Periksa email dan password Anda.')
     } finally {
@@ -28,7 +41,7 @@ export default function UserLogin() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-indigo-700 to-purple-700 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <div className="flex items-center justify-center gap-2 text-indigo-600 mb-2">
             <GraduationCap className="w-8 h-8" />
             <span className="text-2xl font-bold">RuangKuis</span>
@@ -36,6 +49,13 @@ export default function UserLogin() {
           <h2 className="text-2xl font-bold text-gray-800">Masuk</h2>
           <p className="text-gray-500 text-sm mt-1">Masuk untuk mengikuti kuis</p>
         </div>
+
+        {notice && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-xl mb-4 text-xs font-semibold flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-amber-600 flex-shrink-0" />
+            <span>{notice}</span>
+          </div>
+        )}
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">
@@ -81,9 +101,11 @@ export default function UserLogin() {
           Belum punya akun?{' '}
           <Link to="/register" className="text-indigo-600 hover:underline font-medium">Daftar sekarang</Link>
         </p>
-        <p className="text-center text-sm text-gray-400 mt-2">
-          <Link to="/" className="hover:underline">← Kembali ke beranda</Link>
-        </p>
+        <div className="mt-4 pt-4 border-t border-gray-100 text-center">
+          <Link to="/admin/login" className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold inline-flex items-center gap-1">
+            <ShieldAlert className="w-3.5 h-3.5" /> Masuk sebagai Admin RuangKuis
+          </Link>
+        </div>
       </div>
     </div>
   )

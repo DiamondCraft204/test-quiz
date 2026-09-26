@@ -6,8 +6,8 @@ const { evaluateEssayAnswers } = require('../services/aiService');
 const router = express.Router();
 
 // ─── GET /api/quiz ─────────────────────────────────────────────────────────
-// List all published quizzes (auth optional)
-router.get('/', async (req, res, next) => {
+// List all published quizzes (requires auth)
+router.get('/', authenticateUser, async (req, res, next) => {
   try {
     const result = await db.query(`
       SELECT q.id, q.title, q.description, q.num_questions, q.timer_minutes,

@@ -113,6 +113,19 @@ router.post('/login', async (req, res, next) => {
   }
 });
 
+// ─── GET /api/auth/me ─────────────────────────────────────────────────────────
+router.get('/me', authenticateUser, async (req, res, next) => {
+  try {
+    const userRes = await db.query('SELECT id, name, email FROM users WHERE id = $1', [req.user.id]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User tidak ditemukan.' });
+    }
+    return res.json({ success: true, data: { user: userRes.rows[0] } });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── POST /api/auth/logout ────────────────────────────────────────────────────
 router.post('/logout', authenticateUser, async (req, res, next) => {
   try {

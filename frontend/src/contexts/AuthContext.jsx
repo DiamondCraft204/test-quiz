@@ -8,6 +8,39 @@ export function AuthProvider({ children }) {
     try { return JSON.parse(localStorage.getItem('user')) } catch { return null }
   })
   const [token, setToken] = useState(() => localStorage.getItem('token'))
+  const [loading, setLoading] = useState(true)
+
+  const logout = useCallback(() => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    setToken(null)
+    setUser(null)
+  }, [])
+
+  const verifySession = useCallback(async () => {
+    const currentToken = localStorage.getItem('token')
+    if (!currentToken) {
+      setLoading(false)
+      return
+    }
+    try {
+      const res = await api.get('/auth/me')
+      if (res.data?.data?.user) {
+        setUser(res.data.data.user)
+        localStorage.setItem('user', JSON.stringify(res.data.data.user))
+      }
+    } catch (err) {
+      if (err.response?.status === 401) {
+        logout()
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [logout])
+
+  useEffect(() => {
+    verifySession()
+  }, [verifySession])
 
   const login = useCallback(async (email, password) => {
     const res = await api.post('/auth/login', { email, password })
@@ -29,15 +62,8 @@ export function AuthProvider({ children }) {
     return u
   }, [])
 
-  const logout = useCallback(() => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    setToken(null)
-    setUser(null)
-  }, [])
-
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, isAuthenticated: !!token }}>
+    <AuthContext.Provider value={{ user, token, login, register, logout, isAuthenticated: !!token, loading }}>
       {children}
     </AuthContext.Provider>
   )
