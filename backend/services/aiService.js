@@ -18,12 +18,31 @@ const generateQuestions = async (materialText, config) => {
     numQuestions = 30,
     difficulty = 'sedang',
     questionTypes = ['pilihan_ganda', 'benar_salah', 'essay'],
+    typeCounts = null,
   } = config;
 
-  const targetCount = Math.max(1, parseInt(numQuestions, 10) || 30);
-  const typesList = Array.isArray(questionTypes) && questionTypes.length > 0
-    ? questionTypes
-    : ['pilihan_ganda', 'benar_salah', 'essay'];
+  let distributionInstruction = '';
+  let activeTypes = [];
+  let calculatedTarget = 0;
+
+  if (typeCounts && typeof typeCounts === 'object') {
+    const lines = [];
+    for (const [t, count] of Object.entries(typeCounts)) {
+      const c = parseInt(count, 10) || 0;
+      if (c > 0) {
+        activeTypes.push(t);
+        calculatedTarget += c;
+        const typeLabel = t === 'pilihan_ganda' ? 'Pilihan Ganda ("pilihan_ganda")' : t === 'benar_salah' ? 'Benar / Salah ("benar_salah")' : 'Essay ("essay")';
+        lines.push(`  - ${typeLabel}: TEPAT ${c} soal`);
+      }
+    }
+    if (lines.length > 0) {
+      distributionInstruction = `\nINSTRUKSI JUMLAH TIPE SOAL (SANGAT KRUSIAL - WAJIB TEPAT):\nAdmin menetapkan komposisi tipe soal sebagai berikut:\n${lines.join('\n')}\nTotal soal yang WAJIB dibuat: TEPAT ${calculatedTarget} butir soal.\nJANGAN membuat tipe soal selain yang diminta di atas, dan pastikan jumlah butir soal untuk masing-masing tipe PERSIS sama dengan rincian di atas!`;
+    }
+  }
+
+  const targetCount = calculatedTarget > 0 ? calculatedTarget : Math.max(1, parseInt(numQuestions, 10) || 30);
+  const typesList = activeTypes.length > 0 ? activeTypes : (Array.isArray(questionTypes) && questionTypes.length > 0 ? questionTypes : ['pilihan_ganda', 'benar_salah', 'essay']);
 
   // Limit material text to 60,000 chars to prevent prompt bloat while retaining plenty of context
   const cleanMaterial = materialText.length > 60000
@@ -35,9 +54,10 @@ const generateQuestions = async (materialText, config) => {
   const prompt = `Kamu adalah pembuat soal ujian profesional yang ahli. Buatkan tepat ${targetCount} butir soal kuis dalam Bahasa Indonesia berdasarkan materi berikut.
 
 Pengaturan:
-- Jumlah soal yang HARUS dibuat: tepat ${targetCount} soal.
+- Total soal yang HARUS dibuat: tepat ${targetCount} butir soal.
 - Tingkat kesulitan: ${difficulty}
 - Tipe soal yang digunakan: ${typesList.join(', ')}
+${distributionInstruction}
 
 Ketentuan format setiap tipe:
 1. "pilihan_ganda": options harus array berisi 4 opsi string ["A. ...", "B. ...", "C. ...", "D. ..."], correct_answer harus huruf "A", "B", "C", atau "D", explanation penjelasan singkat.

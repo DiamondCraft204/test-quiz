@@ -26,10 +26,14 @@ function Badge({ children, color = 'gray' }) {
 
 function CreateQuizModal({ onClose, onSuccess }) {
   const [form, setForm] = useState({
-    title: '', description: '', numQuestions: 30,
+    title: '', description: '',
     timerMinutes: '', difficulty: 'sedang',
-    questionTypes: ['pilihan_ganda', 'benar_salah', 'essay'],
     useTimer: false,
+  })
+  const [typeConfigs, setTypeConfigs] = useState({
+    pilihan_ganda: { enabled: true, count: 10 },
+    benar_salah: { enabled: true, count: 5 },
+    essay: { enabled: true, count: 5 },
   })
   const [file, setFile] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -38,13 +42,34 @@ function CreateQuizModal({ onClose, onSuccess }) {
   const fileRef = useRef()
 
   const toggleType = (key) => {
-    setForm(f => ({
-      ...f,
-      questionTypes: f.questionTypes.includes(key)
-        ? f.questionTypes.filter(t => t !== key)
-        : [...f.questionTypes, key]
+    setTypeConfigs(prev => ({
+      ...prev,
+      [key]: {
+        ...prev[key],
+        enabled: !prev[key].enabled,
+        count: prev[key].count || 5,
+      }
     }))
   }
+
+  const updateCount = (key, val) => {
+    const num = Math.max(0, parseInt(val, 10) || 0)
+    setTypeConfigs(prev => ({
+      ...prev,
+      [key]: {
+        ...prev[key],
+        count: num,
+      }
+    }))
+  }
+
+  const totalQuestions = Object.entries(typeConfigs)
+    .filter(([_, cfg]) => cfg.enabled)
+    .reduce((sum, [_, cfg]) => sum + (parseInt(cfg.count, 10) || 0), 0)
+
+  const activeQuestionTypes = Object.entries(typeConfigs)
+    .filter(([_, cfg]) => cfg.enabled && (parseInt(cfg.count, 10) || 0) > 0)
+    .map(([key]) => key)
 
   const handleDrop = (e) => {
     e.preventDefault()
@@ -60,21 +85,36 @@ function CreateQuizModal({ onClose, onSuccess }) {
       setError(`Ukuran file terlalu besar (${(file.size / 1024 / 1024).toFixed(1)} MB). Batas upload server Vercel adalah maksimal 4.5 MB. Silakan gunakan modul/bab materi atau ringkasan PDF.`);
       return;
     }
-    if (form.questionTypes.length === 0) { setError('Pilih minimal satu tipe soal.'); return }
+    if (activeQuestionTypes.length === 0 || totalQuestions <= 0) {
+      setError('Tentukan minimal 1 tipe soal dengan jumlah soal minimal 1 butir.');
+      return;
+    }
 
     setLoading(true)
     setProgress('Mengupload dan membaca materi...')
     try {
+      const typeCounts = {}
+      Object.entries(typeConfigs).forEach(([k, cfg]) => {
+        if (cfg.enabled && (parseInt(cfg.count, 10) || 0) > 0) {
+          typeCounts[k] = parseInt(cfg.count, 10) || 0
+        }
+      })
+
       const fd = new FormData()
       fd.append('material', file)
       fd.append('title', form.title)
       fd.append('description', form.description)
-      fd.append('numQuestions', form.numQuestions)
+      fd.append('numQuestions', totalQuestions)
       fd.append('difficulty', form.difficulty)
-      fd.append('questionTypes', JSON.stringify(form.questionTypes))
+      fd.append('questionTypes', JSON.stringify(activeQuestionTypes))
+      fd.append('typeCounts', JSON.stringify(typeCounts))
       if (form.useTimer && form.timerMinutes) fd.append('timerMinutes', form.timerMinutes)
 
-      setProgress('Sedang memproses dan membuat soal otomatis... (mungkin butuh 30-60 detik)')
+      const breakdownSummary = Object.entries(typeCounts)
+        .map(([k, c]) => `${c} ${k === 'pilihan_ganda' ? 'PG' : k === 'benar_salah' ? 'B/S' : 'Essay'}`)
+        .join(', ')
+
+      setProgress(`Sedang membuat ${totalQuestions} butir soal (${breakdownSummary})... (mungkin butuh 30-60 detik)`)
       const res = await adminApi.post('/admin/quizzes', fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 120000,
@@ -147,14 +187,8 @@ function CreateQuizModal({ onClose, onSuccess }) {
             </div>
           </div>
 
-          {/* Settings */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Jumlah Soal</label>
-              <input type="number" min="1" max="100" value={form.numQuestions}
-                onChange={e => setForm(f => ({ ...f, numQuestions: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-            </div>
+          {/* Settings: Difficulty & Timer */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Tingkat Kesulitan</label>
               <select value={form.difficulty} onChange={e => setForm(f => ({ ...f, difficulty: e.target.value }))}
@@ -162,38 +196,92 @@ function CreateQuizModal({ onClose, onSuccess }) {
                 {DIFFICULTIES.map(d => <option key={d} value={d} className="capitalize">{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
               </select>
             </div>
+            <div>
+              <label className="flex items-center gap-2 cursor-pointer select-none mb-1">
+                <input type="checkbox" checked={form.useTimer}
+                  onChange={e => setForm(f => ({ ...f, useTimer: e.target.checked }))}
+                  className="rounded text-indigo-600 focus:ring-indigo-500" />
+                <span className="text-sm font-medium text-gray-700">Aktifkan Timer (Menit)</span>
+              </label>
+              <input type="number" min="1" max="300" placeholder="Durasi dalam menit (misal: 60)"
+                disabled={!form.useTimer}
+                value={form.timerMinutes}
+                onChange={e => setForm(f => ({ ...f, timerMinutes: e.target.value }))}
+                className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                  form.useTimer ? 'bg-white border-gray-300' : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                }`} />
+            </div>
           </div>
 
-          {/* Timer */}
-          <div>
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input type="checkbox" checked={form.useTimer}
-                onChange={e => setForm(f => ({ ...f, useTimer: e.target.checked }))}
-                className="rounded" />
-              <span className="text-sm font-medium text-gray-700">Aktifkan Timer</span>
-            </label>
-            {form.useTimer && (
-              <div className="mt-2">
-                <input type="number" min="1" max="300" placeholder="Durasi dalam menit"
-                  value={form.timerMinutes}
-                  onChange={e => setForm(f => ({ ...f, timerMinutes: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              </div>
-            )}
-          </div>
-
-          {/* Question Types */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Tipe Soal</label>
-            <div className="flex gap-3 flex-wrap">
-              {Q_TYPES.map(({ key, label }) => (
-                <label key={key} className={`flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border transition
-                  ${form.questionTypes.includes(key) ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-300 text-gray-600'}`}>
-                  <input type="checkbox" checked={form.questionTypes.includes(key)}
-                    onChange={() => toggleType(key)} className="hidden" />
-                  {label}
+          {/* Question Types & Exact Count Input */}
+          <div className="bg-gray-50/80 border border-gray-200 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-sm font-bold text-gray-800">
+                  Komposisi Tipe & Jumlah Soal
                 </label>
-              ))}
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Tentukan berapa banyak butir soal yang ingin dibuat untuk setiap tipenya
+                </p>
+              </div>
+              <div className="text-right">
+                <span className={`text-xs font-bold px-3 py-1.5 rounded-full border ${
+                  totalQuestions > 0 ? 'bg-indigo-100 text-indigo-800 border-indigo-200' : 'bg-red-100 text-red-700 border-red-200'
+                }`}>
+                  Total: {totalQuestions} Soal
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              {Q_TYPES.map(({ key, label }) => {
+                const isEnabled = typeConfigs[key]?.enabled;
+                const count = typeConfigs[key]?.count ?? 0;
+                return (
+                  <div key={key} className={`p-3 rounded-xl border transition-all ${
+                    isEnabled
+                      ? 'border-indigo-500 bg-white shadow-xs ring-2 ring-indigo-500/10'
+                      : 'border-gray-200 bg-gray-100/60 opacity-60'
+                  }`}>
+                    <label className="flex items-center gap-2 cursor-pointer select-none mb-2">
+                      <input
+                        type="checkbox"
+                        checked={isEnabled}
+                        onChange={() => toggleType(key)}
+                        className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                      />
+                      <span className={`text-sm font-bold ${isEnabled ? 'text-indigo-900' : 'text-gray-600'}`}>
+                        {label}
+                      </span>
+                    </label>
+
+                    <div className="mt-2">
+                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                        Jumlah Soal:
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="1"
+                          max="100"
+                          disabled={!isEnabled}
+                          value={isEnabled ? count : 0}
+                          onChange={(e) => updateCount(key, e.target.value)}
+                          className={`w-full text-sm border rounded-lg pl-3 pr-10 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                            isEnabled
+                              ? 'bg-white border-gray-300 text-gray-900 font-semibold'
+                              : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                          }`}
+                          placeholder="0"
+                        />
+                        <span className="absolute right-3 top-1.5 text-xs text-gray-400 pointer-events-none">
+                          soal
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -209,7 +297,7 @@ function CreateQuizModal({ onClose, onSuccess }) {
               className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-lg hover:bg-gray-50 transition">
               Batal
             </button>
-            <button type="submit" disabled={loading}
+            <button type="submit" disabled={loading || totalQuestions <= 0}
               className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg transition flex items-center justify-center gap-2 disabled:opacity-60">
               {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Membuat...</> : <><BookOpen className="w-4 h-4" /> Generate Soal Otomatis</>}
             </button>

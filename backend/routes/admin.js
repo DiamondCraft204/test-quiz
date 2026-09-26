@@ -59,6 +59,7 @@ router.post('/quizzes', upload.single('material'), async (req, res, next) => {
       timerMinutes,
       difficulty = 'sedang',
       questionTypes,
+      typeCounts,
     } = req.body;
 
     if (!title) {
@@ -69,12 +70,36 @@ router.post('/quizzes', upload.single('material'), async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'File materi wajib diunggah.' });
     }
 
+    let parsedTypeCounts = null;
+    if (typeCounts) {
+      try {
+        parsedTypeCounts = typeof typeCounts === 'string' ? JSON.parse(typeCounts) : typeCounts;
+      } catch {
+        parsedTypeCounts = null;
+      }
+    }
+
     let parsedTypes;
     try {
-      parsedTypes = questionTypes ? JSON.parse(questionTypes) : ['pilihan_ganda', 'benar_salah', 'essay'];
+      parsedTypes = questionTypes ? (typeof questionTypes === 'string' ? JSON.parse(questionTypes) : questionTypes) : ['pilihan_ganda', 'benar_salah', 'essay'];
     } catch {
       return res.status(400).json({ success: false, message: 'Format questionTypes tidak valid (harus JSON array).' });
     }
+
+    let totalTarget = 0;
+    const activeTypes = [];
+    if (parsedTypeCounts && typeof parsedTypeCounts === 'object') {
+      for (const [t, c] of Object.entries(parsedTypeCounts)) {
+        const count = parseInt(c, 10) || 0;
+        if (count > 0) {
+          totalTarget += count;
+          activeTypes.push(t);
+        }
+      }
+    }
+
+    const finalNumQuestions = totalTarget > 0 ? totalTarget : Math.max(1, parseInt(numQuestions, 10) || 30);
+    const finalTypes = activeTypes.length > 0 ? activeTypes : parsedTypes;
 
     // Extract text from uploaded file
     let materialText;
@@ -92,9 +117,10 @@ router.post('/quizzes', upload.single('material'), async (req, res, next) => {
     let questions;
     try {
       questions = await generateQuestions(materialText, {
-        numQuestions: parseInt(numQuestions, 10),
+        numQuestions: finalNumQuestions,
         difficulty,
-        questionTypes: parsedTypes,
+        questionTypes: finalTypes,
+        typeCounts: parsedTypeCounts,
       });
     } catch (err) {
       return res.status(502).json({ success: false, message: err.message });
@@ -111,10 +137,10 @@ router.post('/quizzes', upload.single('material'), async (req, res, next) => {
         description || null,
         req.file.originalname,
         materialText,
-        parseInt(numQuestions, 10),
+        questions.length || finalNumQuestions,
         timerMinutes ? parseInt(timerMinutes, 10) : null,
         difficulty,
-        JSON.stringify(parsedTypes),
+        JSON.stringify(finalTypes),
       ]
     );
 
