@@ -255,9 +255,48 @@ router.get('/quizzes/:id/results', async (req, res, next) => {
       [req.params.id]
     );
 
+    // Fetch questions to enrich submission answers if needed
+    const qRes = await db.query(
+      'SELECT id, type, text, correct_answer, explanation FROM questions WHERE quiz_id = $1 ORDER BY order_num ASC',
+      [req.params.id]
+    );
+    const questionMap = {};
+    qRes.rows.forEach((q) => { questionMap[q.id] = q; });
+
+    const enrichedSubmissions = submissionsRes.rows.map((sub) => {
+      let parsedAnswers = [];
+      try {
+        parsedAnswers = typeof sub.answers === 'string' ? JSON.parse(sub.answers) : (sub.answers || []);
+      } catch {
+        parsedAnswers = [];
+      }
+
+      const answersWithDetails = (parsedAnswers || []).map((a) => {
+        const q = questionMap[a.questionId] || {};
+        const isEssay = (a.questionType || q.type) === 'essay';
+        let score = a.score;
+        if (score === undefined || score === null) {
+          score = a.isCorrect === true ? 100 : (a.isCorrect === false ? 0 : 0);
+        }
+        return {
+          ...a,
+          questionText: a.questionText || q.text || '',
+          correctAnswer: a.correctAnswer || q.correct_answer || '',
+          explanation: a.explanation || q.explanation || '',
+          questionType: a.questionType || q.type || (isEssay ? 'essay' : 'pilihan_ganda'),
+          score,
+        };
+      });
+
+      return {
+        ...sub,
+        answers: answersWithDetails,
+      };
+    });
+
     return res.json({
       success: true,
-      data: { quiz: quizRes.rows[0], submissions: submissionsRes.rows },
+      data: { quiz: quizRes.rows[0], submissions: enrichedSubmissions },
     });
   } catch (err) {
     next(err);

@@ -84,12 +84,22 @@ router.get('/submissions/:id', authenticateUser, async (req, res, next) => {
 
     const questionMap = {};
     questions.forEach((q) => { questionMap[q.id] = q; });
-    const enrichedAnswers = parsedAnswers.map((a) => ({
-      ...a,
-      questionText: a.questionText || questionMap[a.questionId]?.text || '',
-      correctAnswer: a.correctAnswer || questionMap[a.questionId]?.correct_answer || '',
-      explanation: a.explanation || questionMap[a.questionId]?.explanation || '',
-    }));
+    const enrichedAnswers = parsedAnswers.map((a) => {
+      const q = questionMap[a.questionId] || {};
+      const isEssay = (a.questionType || q.type) === 'essay';
+      let score = a.score;
+      if (score === undefined || score === null) {
+        score = a.isCorrect === true ? 100 : (a.isCorrect === false ? 0 : 0);
+      }
+      return {
+        ...a,
+        questionText: a.questionText || q.text || '',
+        correctAnswer: a.correctAnswer || q.correct_answer || '',
+        explanation: a.explanation || q.explanation || '',
+        questionType: a.questionType || q.type || (isEssay ? 'essay' : 'pilihan_ganda'),
+        score,
+      };
+    });
 
     return res.json({
       success: true,

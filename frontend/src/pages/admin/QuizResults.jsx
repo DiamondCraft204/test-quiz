@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { adminApi } from '../../api/axios'
-import { ArrowLeft, GraduationCap, Loader2, Users, Trophy, Clock, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react'
+import { ArrowLeft, GraduationCap, Loader2, Users, Trophy, Clock, TrendingUp, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react'
 
 function formatTime(seconds) {
   if (!seconds) return '—'
@@ -88,8 +88,10 @@ export default function QuizResults() {
         ) : (
           <div className="space-y-3">
             {submissions.map((sub) => {
-              let answers = []
-              try { answers = JSON.parse(sub.answers) } catch { }
+              let answers = Array.isArray(sub.answers) ? sub.answers : []
+              if (!answers.length && typeof sub.answers === 'string') {
+                try { answers = JSON.parse(sub.answers) || [] } catch { answers = [] }
+              }
               return (
                 <div key={sub.id} className="bg-white rounded-xl border shadow-sm overflow-hidden">
                   <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50"
@@ -120,28 +122,102 @@ export default function QuizResults() {
                     </div>
                   </div>
                   {expanded === sub.id && answers.length > 0 && (
-                    <div className="border-t p-4 bg-gray-50 space-y-2">
-                      {answers.map((a, i) => {
-                        const isEssay = a.questionType === 'essay';
-                        return (
-                          <div key={i} className={`text-sm px-3 py-2 rounded-lg ${
-                            a.isCorrect === true ? 'bg-green-50 text-green-800' :
-                            a.isCorrect === 'partial' || (isEssay && (a.score || 0) >= 40) ? 'bg-amber-50 text-amber-800' :
-                            a.isCorrect === false ? 'bg-red-50 text-red-800' :
-                            'bg-yellow-50 text-yellow-800'
-                          }`}>
-                            <span className="font-medium">Soal {i + 1}:</span> {a.questionText?.substring(0, 60)}...
-                            <span className="ml-2">→ Jawaban: <span className="font-medium">{a.answer || '(kosong)'}</span></span>
-                            {isEssay && (
-                              <span className="ml-2 font-semibold">
-                                [Essay: Nilai {a.score ?? 0}/100{a.feedback ? ` - ${a.feedback}` : ''}]
-                              </span>
-                            )}
-                            {!isEssay && a.isCorrect === true && ' ✓'}
-                            {!isEssay && a.isCorrect === false && ` ✗ (Benar: ${a.correctAnswer})`}
-                          </div>
-                        );
-                      })}
+                    <div className="border-t p-4 md:p-6 bg-slate-50 space-y-4">
+                      <div className="flex items-center justify-between border-b pb-3">
+                        <div className="font-bold text-gray-800 text-sm flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-indigo-600" />
+                          Rincian Jawaban & Nilai Tiap Soal ({answers.length} Soal)
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          Total Nilai: <span className="font-bold text-gray-800">{sub.score?.toFixed(1)}%</span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        {answers.map((a, i) => {
+                          const isEssay = a.questionType === 'essay';
+                          const qScore = a.score !== undefined ? a.score : (a.isCorrect ? 100 : 0);
+
+                          let scoreBadge = {
+                            bg: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+                            label: '100/100 (Sempurna)'
+                          };
+                          if (qScore === 100) {
+                            scoreBadge = { bg: 'bg-emerald-100 text-emerald-800 border-emerald-300', label: '100/100 (Sempurna)' };
+                          } else if (qScore >= 70) {
+                            scoreBadge = { bg: 'bg-blue-100 text-blue-800 border-blue-300', label: `${qScore}/100 (Mendekati)` };
+                          } else if (qScore >= 10) {
+                            scoreBadge = { bg: 'bg-amber-100 text-amber-800 border-amber-300', label: `${qScore}/100 (Kurang)` };
+                          } else if (qScore > 0) {
+                            scoreBadge = { bg: 'bg-orange-100 text-orange-800 border-orange-300', label: `${qScore}/100 (Apa Adanya)` };
+                          } else {
+                            scoreBadge = { bg: 'bg-red-100 text-red-800 border-red-300', label: '0/100 (Salah/Kosong)' };
+                          }
+
+                          const typeBadge = isEssay ? 'Essay' : a.questionType === 'benar_salah' ? 'Benar / Salah' : 'Pilihan Ganda';
+
+                          return (
+                            <div key={i} className="bg-white rounded-xl border border-gray-200 p-4 shadow-xs">
+                              {/* Header: Soal #, Type, and Nilai */}
+                              <div className="flex flex-wrap items-center justify-between gap-2 mb-2 pb-2 border-b border-gray-100">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-gray-900 text-sm">Soal {i + 1}</span>
+                                  <span className="text-xs px-2 py-0.5 rounded font-medium bg-gray-100 text-gray-600">
+                                    {typeBadge}
+                                  </span>
+                                </div>
+                                <span className={`text-xs px-2.5 py-1 rounded-full font-bold border ${scoreBadge.bg}`}>
+                                  Nilai: {scoreBadge.label}
+                                </span>
+                              </div>
+
+                              {/* Question Text */}
+                              <p className="text-gray-800 font-medium text-sm mb-3">
+                                {a.questionText || `Pertanyaan #${i + 1}`}
+                              </p>
+
+                              {/* Jawaban Peserta vs Kunci Jawaban */}
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                <div className={`p-3 rounded-lg border ${
+                                  qScore >= 70 ? 'bg-green-50/50 border-green-200 text-green-900' :
+                                  qScore >= 10 ? 'bg-amber-50/50 border-amber-200 text-amber-900' :
+                                  'bg-red-50/50 border-red-200 text-red-900'
+                                }`}>
+                                  <div className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">
+                                    Jawaban Peserta:
+                                  </div>
+                                  <div className="font-medium whitespace-pre-wrap">
+                                    {a.answer || <span className="italic text-gray-400">(Tidak dijawab)</span>}
+                                  </div>
+                                </div>
+
+                                <div className="p-3 rounded-lg border bg-emerald-50 border-emerald-200 text-emerald-950">
+                                  <div className="text-xs font-bold uppercase tracking-wider text-emerald-700 mb-1 flex items-center gap-1">
+                                    <span>✓ Kunci Jawaban (Nilai Sempurna):</span>
+                                  </div>
+                                  <div className="font-medium whitespace-pre-wrap">
+                                    {a.correctAnswer || <span className="italic text-gray-400">-</span>}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Evaluasi / Feedback if essay */}
+                              {isEssay && a.feedback && (
+                                <div className="mt-2.5 p-2.5 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-900 text-xs">
+                                  <span className="font-bold">💬 Catatan Evaluasi AI:</span> {a.feedback}
+                                </div>
+                              )}
+
+                              {/* Explanation if exists */}
+                              {a.explanation && !isEssay && (
+                                <div className="mt-2.5 p-2.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-900 text-xs">
+                                  <span className="font-bold">💡 Pembahasan:</span> {a.explanation}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
