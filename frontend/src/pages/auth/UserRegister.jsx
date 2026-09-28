@@ -33,7 +33,7 @@ export default function UserRegister() {
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 text-indigo-600 mb-2">
             <GraduationCap className="w-8 h-8" />
-            <span className="text-2xl font-bold">RuangKuis</span>
+            <span className="text-2xl font-bold">Ruang tugas</span>
           </div>
           <h2 className="text-2xl font-bold text-gray-800">Buat Akun</h2>
           <p className="text-gray-500 text-sm mt-1">Daftar untuk mulai mengikuti kuis</p>

@@ -48,7 +48,7 @@ export default function QuizList() {
       <div className="bg-white shadow-sm border-b sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2 text-indigo-600 font-bold text-xl">
-            <GraduationCap className="w-6 h-6" /> RuangKuis
+            <GraduationCap className="w-6 h-6" /> Ruang tugas
           </div>
           <div className="flex items-center gap-4">
             <span className="text-gray-600 text-sm font-medium hidden sm:block">👋 {user?.name}</span>

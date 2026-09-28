@@ -49,7 +49,7 @@ export default function UserLogin() {
         <div className="text-center mb-6">
           <div className="flex items-center justify-center gap-2 text-indigo-600 mb-2">
             <GraduationCap className="w-8 h-8" />
-            <span className="text-2xl font-bold">RuangKuis</span>
+            <span className="text-2xl font-bold">Ruang tugas</span>
           </div>
           <h2 className="text-2xl font-bold text-gray-800">Masuk</h2>
           <p className="text-gray-500 text-sm mt-1">Masuk untuk mengikuti kuis</p>
@@ -108,7 +108,7 @@ export default function UserLogin() {
         </p>
         <div className="mt-4 pt-4 border-t border-gray-100 text-center">
           <Link to="/admin/login" className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold inline-flex items-center gap-1">
-            <ShieldAlert className="w-3.5 h-3.5" /> Masuk sebagai Admin RuangKuis
+            <ShieldAlert className="w-3.5 h-3.5" /> Masuk sebagai Admin Ruang tugas
           </Link>
         </div>
       </div>

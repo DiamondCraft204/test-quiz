@@ -8,7 +8,7 @@ export default function Landing() {
       <nav className="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
         <div className="flex items-center gap-2 text-white text-2xl font-bold">
           <GraduationCap className="w-8 h-8 text-yellow-300" />
-          RuangKuis
+          Ruang tugas
         </div>
         <div className="flex gap-3">
           <Link to="/login" className="px-4 py-2 text-white border border-white/30 rounded-lg hover:bg-white/10 transition">

@@ -55,7 +55,7 @@ export default function QuizResults() {
             <ArrowLeft className="w-4 h-4" /> Kembali ke soal
           </button>
           <div className="flex items-center gap-2 text-indigo-600 font-bold">
-            <GraduationCap className="w-5 h-5" /> RuangKuis Admin
+            <GraduationCap className="w-5 h-5" /> Ruang tugas Admin
           </div>
         </div>
       </div>

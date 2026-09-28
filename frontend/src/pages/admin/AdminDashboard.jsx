@@ -559,7 +559,7 @@ export default function AdminDashboard() {
       <div className="bg-white shadow-sm border-b sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2 text-indigo-600 font-bold text-xl">
-            <GraduationCap className="w-6 h-6" /> RuangKuis <span className="text-gray-400 font-normal text-sm ml-2">Panel Admin</span>
+            <GraduationCap className="w-6 h-6" /> Ruang tugas <span className="text-gray-400 font-normal text-sm ml-2">Panel Admin</span>
           </div>
           <button onClick={handleLogout}
             className="flex items-center gap-2 text-gray-500 hover:text-red-600 transition text-sm">

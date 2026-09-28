@@ -39,7 +39,7 @@ export default function AdminLogin() {
         <div className="text-center mb-6">
           <div className="flex items-center justify-center gap-2 text-indigo-600 mb-3">
             <GraduationCap className="w-8 h-8" />
-            <span className="text-2xl font-bold">RuangKuis</span>
+            <span className="text-2xl font-bold">Ruang tugas</span>
           </div>
           <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 px-4 py-2 rounded-full text-sm font-medium mb-3">
             <Shield className="w-4 h-4" /> Panel Admin
