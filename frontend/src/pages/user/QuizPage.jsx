@@ -197,7 +197,13 @@ export default function QuizPage() {
       if (initialDraft.current?.current && initialDraft.current.current >= qList.length) {
         setCurrent(0)
       }
-    } catch { navigate('/quizzes') } finally { setLoading(false) }
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Gagal memuat kuis.'
+      alert(msg)
+      navigate('/quizzes')
+    } finally {
+      setLoading(false)
+    }
   }, [id, navigate])
 
   useEffect(() => { fetchQuiz() }, [fetchQuiz])

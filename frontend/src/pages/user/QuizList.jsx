@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import api from '../../api/axios'
-import { GraduationCap, LogOut, BookOpen, Clock, ChevronRight, CheckCircle, Loader2, Trophy } from 'lucide-react'
+import { GraduationCap, LogOut, BookOpen, Clock, ChevronRight, CheckCircle, Loader2, Trophy, UserCheck } from 'lucide-react'
 
 const DIFF_COLORS = { mudah: 'text-green-600 bg-green-50', sedang: 'text-blue-600 bg-blue-50', sulit: 'text-red-600 bg-red-50' }
 
@@ -137,6 +137,11 @@ export default function QuizList() {
                       )}
                     </div>
                     <div className="flex flex-wrap gap-2 mt-4">
+                      {quiz.target_type === 'specific' && (
+                        <span className="flex items-center gap-1 text-xs font-semibold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200">
+                          <UserCheck className="w-3.5 h-3.5" /> Khusus untuk Anda
+                        </span>
+                      )}
                       <span className="flex items-center gap-1 text-sm text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
                         <BookOpen className="w-3.5 h-3.5" /> {quiz.num_questions} soal
                       </span>

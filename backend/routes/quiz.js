@@ -6,12 +6,12 @@ const { evaluateEssayAnswers } = require('../services/aiService');
 const router = express.Router();
 
 // ─── GET /api/quiz ─────────────────────────────────────────────────────────
-// List all published quizzes (requires auth)
+// List all published quizzes accessible to current user (requires auth)
 router.get('/', authenticateUser, async (req, res, next) => {
   try {
     const result = await db.query(`
       SELECT q.id, q.title, q.description, q.num_questions, q.timer_minutes,
-             q.difficulty, q.question_types, q.created_at,
+             q.difficulty, q.question_types, q.target_type, q.allowed_user_ids, q.created_at,
              COUNT(qs.id) AS question_count
       FROM quizzes q
       LEFT JOIN questions qs ON qs.quiz_id = q.id
@@ -20,7 +20,24 @@ router.get('/', authenticateUser, async (req, res, next) => {
       ORDER BY q.created_at DESC
     `);
 
-    return res.json({ success: true, data: result.rows });
+    // Filter by audience: 'all' or specific user matches
+    const userId = Number(req.user.id);
+    const visibleQuizzes = result.rows.filter((q) => {
+      const targetType = q.target_type || 'all';
+      if (targetType === 'all') return true;
+      if (targetType === 'specific') {
+        let allowed = [];
+        try {
+          allowed = typeof q.allowed_user_ids === 'string' ? JSON.parse(q.allowed_user_ids) : (q.allowed_user_ids || []);
+        } catch {
+          allowed = [];
+        }
+        return Array.isArray(allowed) && allowed.map(Number).includes(userId);
+      }
+      return true;
+    });
+
+    return res.json({ success: true, data: visibleQuizzes });
   } catch (err) {
     next(err);
   }
@@ -127,7 +144,7 @@ router.get('/:id', authenticateUser, async (req, res, next) => {
   try {
     const quizRes = await db.query(
       `SELECT id, title, description, num_questions, timer_minutes,
-              difficulty, question_types, is_published, created_at
+              difficulty, question_types, target_type, allowed_user_ids, is_published, created_at
        FROM quizzes
        WHERE id = $1 AND is_published = 1`,
       [req.params.id]
@@ -138,6 +155,25 @@ router.get('/:id', authenticateUser, async (req, res, next) => {
     }
 
     const quiz = quizRes.rows[0];
+
+    // Check audience permission
+    const targetType = quiz.target_type || 'all';
+    if (targetType === 'specific') {
+      let allowed = [];
+      try {
+        allowed = typeof quiz.allowed_user_ids === 'string' ? JSON.parse(quiz.allowed_user_ids) : (quiz.allowed_user_ids || []);
+      } catch {
+        allowed = [];
+      }
+      const userId = Number(req.user.id);
+      if (!Array.isArray(allowed) || !allowed.map(Number).includes(userId)) {
+        return res.status(403).json({
+          success: false,
+          code: 'QUIZ_ACCESS_RESTRICTED',
+          message: 'Kuis ini bersifat terbatas dan hanya dapat diakses oleh peserta tertentu yang telah ditentukan oleh admin.',
+        });
+      }
+    }
 
     // Check if user has already submitted this quiz
     const existingSub = await db.query(
@@ -203,6 +239,25 @@ router.post('/:id/submit', authenticateUser, async (req, res, next) => {
     }
 
     const quiz = quizRes.rows[0];
+
+    // Check audience permission
+    const targetType = quiz.target_type || 'all';
+    if (targetType === 'specific') {
+      let allowed = [];
+      try {
+        allowed = typeof quiz.allowed_user_ids === 'string' ? JSON.parse(quiz.allowed_user_ids) : (quiz.allowed_user_ids || []);
+      } catch {
+        allowed = [];
+      }
+      const userId = Number(req.user.id);
+      if (!Array.isArray(allowed) || !allowed.map(Number).includes(userId)) {
+        return res.status(403).json({
+          success: false,
+          code: 'QUIZ_ACCESS_RESTRICTED',
+          message: 'Anda tidak memiliki hak akses untuk mengerjakan atau mengumpulkan kuis ini.',
+        });
+      }
+    }
 
     // Single attempt enforcement: User cannot take the quiz twice
     const existingSub = await db.query(

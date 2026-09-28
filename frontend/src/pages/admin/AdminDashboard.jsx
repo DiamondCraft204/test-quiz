@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { adminApi } from '../../api/axios'
 import {
   GraduationCap, Plus, LogOut, BookOpen, Users, CheckCircle, XCircle,
-  Trash2, Eye, BarChart2, Upload, Loader2, X, ChevronDown, RefreshCw, Settings, FileQuestion
+  Trash2, Eye, BarChart2, Upload, Loader2, X, ChevronDown, RefreshCw, Settings, FileQuestion,
+  UserCheck, Globe, Search, UserPlus
 } from 'lucide-react'
+import AssignUsersModal from '../../components/AssignUsersModal'
 
 const DIFFICULTIES = ['mudah', 'sedang', 'sulit']
 const Q_TYPES = [
@@ -40,6 +42,45 @@ function CreateQuizModal({ onClose, onSuccess }) {
   const [error, setError] = useState('')
   const [progress, setProgress] = useState('')
   const fileRef = useRef()
+
+  // Target audience configuration
+  const [targetType, setTargetType] = useState('all') // 'all' or 'specific'
+  const [usersList, setUsersList] = useState([])
+  const [selectedUserIds, setSelectedUserIds] = useState([])
+  const [userSearch, setUserSearch] = useState('')
+  const [loadingUsers, setLoadingUsers] = useState(false)
+
+  const fetchUsers = async () => {
+    if (usersList.length > 0) return
+    setLoadingUsers(true)
+    try {
+      const res = await adminApi.get('/admin/users')
+      setUsersList(res.data.data || [])
+    } catch {
+      // ignore
+    } finally {
+      setLoadingUsers(false)
+    }
+  }
+
+  const toggleUser = (id) => {
+    const numId = Number(id)
+    setSelectedUserIds(prev => prev.includes(numId) ? prev.filter(uid => uid !== numId) : [...prev, numId])
+  }
+
+  const handleSelectAllUsers = () => {
+    setSelectedUserIds(usersList.map(u => Number(u.id)))
+  }
+
+  const handleDeselectAllUsers = () => {
+    setSelectedUserIds([])
+  }
+
+  const filteredUsers = usersList.filter(
+    (u) =>
+      u.name?.toLowerCase().includes(userSearch.toLowerCase()) ||
+      u.email?.toLowerCase().includes(userSearch.toLowerCase())
+  )
 
   const toggleType = (key) => {
     setTypeConfigs(prev => ({
@@ -89,6 +130,10 @@ function CreateQuizModal({ onClose, onSuccess }) {
       setError('Tentukan minimal 1 tipe soal dengan jumlah soal minimal 1 butir.');
       return;
     }
+    if (targetType === 'specific' && selectedUserIds.length === 0) {
+      setError('Pilih minimal 1 akun peserta untuk kuis bertipe khusus.');
+      return;
+    }
 
     setLoading(true)
     setProgress('Mengupload dan membaca materi...')
@@ -108,6 +153,8 @@ function CreateQuizModal({ onClose, onSuccess }) {
       fd.append('difficulty', form.difficulty)
       fd.append('questionTypes', JSON.stringify(activeQuestionTypes))
       fd.append('typeCounts', JSON.stringify(typeCounts))
+      fd.append('targetType', targetType)
+      fd.append('allowedUserIds', JSON.stringify(selectedUserIds))
       if (form.useTimer && form.timerMinutes) fd.append('timerMinutes', form.timerMinutes)
 
       const breakdownSummary = Object.entries(typeCounts)
@@ -285,6 +332,157 @@ function CreateQuizModal({ onClose, onSuccess }) {
             </div>
           </div>
 
+          {/* Target Audience Configuration */}
+          <div className="bg-gray-50/80 border border-gray-200 rounded-xl p-4 space-y-3">
+            <div>
+              <label className="block text-sm font-bold text-gray-800">
+                Sasaran Peserta Kuis
+              </label>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Pilih apakah kuis ini untuk semua user atau hanya akun peserta tertentu dari database
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div
+                onClick={() => setTargetType('all')}
+                className={`p-3.5 rounded-xl border cursor-pointer transition flex items-start gap-3 ${
+                  targetType === 'all'
+                    ? 'border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-500/20 shadow-xs'
+                    : 'border-gray-200 bg-white hover:bg-gray-50'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="createTargetType"
+                  checked={targetType === 'all'}
+                  onChange={() => setTargetType('all')}
+                  className="mt-1 text-indigo-600 focus:ring-indigo-500"
+                />
+                <div>
+                  <div className="flex items-center gap-1.5 font-bold text-sm text-gray-800">
+                    <Globe className="w-4 h-4 text-emerald-600" />
+                    Semua Peserta (Publik)
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Semua akun user yang terdaftar di database dapat melihat dan mengerjakan kuis ini.
+                  </p>
+                </div>
+              </div>
+
+              <div
+                onClick={() => {
+                  setTargetType('specific')
+                  if (usersList.length === 0) fetchUsers()
+                }}
+                className={`p-3.5 rounded-xl border cursor-pointer transition flex items-start gap-3 ${
+                  targetType === 'specific'
+                    ? 'border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-500/20 shadow-xs'
+                    : 'border-gray-200 bg-white hover:bg-gray-50'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="createTargetType"
+                  checked={targetType === 'specific'}
+                  onChange={() => {
+                    setTargetType('specific')
+                    if (usersList.length === 0) fetchUsers()
+                  }}
+                  className="mt-1 text-indigo-600 focus:ring-indigo-500"
+                />
+                <div>
+                  <div className="flex items-center gap-1.5 font-bold text-sm text-gray-800">
+                    <UserCheck className="w-4 h-4 text-indigo-600" />
+                    Hanya User Tertentu
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Hanya akun user yang dipilih dari database yang dapat melihat dan mengerjakan.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {targetType === 'specific' && (
+              <div className="mt-3 pt-3 border-t border-gray-200 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Cari nama atau email user di database..."
+                      value={userSearch}
+                      onChange={(e) => setUserSearch(e.target.value)}
+                      className="w-full pl-9 pr-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={handleSelectAllUsers}
+                      className="text-indigo-600 hover:text-indigo-800 font-semibold px-2 py-1 rounded bg-indigo-50 hover:bg-indigo-100 transition"
+                    >
+                      Pilih Semua
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDeselectAllUsers}
+                      className="text-gray-600 hover:text-gray-800 font-semibold px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 transition"
+                    >
+                      Batal
+                    </button>
+                    <span className="font-bold text-indigo-700 bg-indigo-100 px-2 py-1 rounded-full text-[11px]">
+                      {selectedUserIds.length} dipilih
+                    </span>
+                  </div>
+                </div>
+
+                {loadingUsers ? (
+                  <div className="py-6 flex items-center justify-center gap-2 text-gray-500 text-xs">
+                    <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+                    Memuat daftar akun peserta dari database...
+                  </div>
+                ) : usersList.length === 0 ? (
+                  <div className="py-4 text-center text-xs text-gray-500">
+                    Belum ada akun peserta yang tersimpan di database.
+                  </div>
+                ) : filteredUsers.length === 0 ? (
+                  <div className="py-4 text-center text-xs text-gray-500">
+                    Tidak ditemukan peserta dengan kata kunci "{userSearch}".
+                  </div>
+                ) : (
+                  <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100 bg-white">
+                    {filteredUsers.map((u) => {
+                      const isChecked = selectedUserIds.includes(Number(u.id))
+                      return (
+                        <label
+                          key={u.id}
+                          className={`flex items-center gap-3 px-3 py-2 text-xs cursor-pointer hover:bg-indigo-50/50 transition ${
+                            isChecked ? 'bg-indigo-50/30' : ''
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => toggleUser(u.id)}
+                            className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          />
+                          <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-[10px] flex-shrink-0">
+                            {u.name?.charAt(0)?.toUpperCase() || 'U'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-gray-800 truncate">{u.name}</div>
+                            <div className="text-gray-400 text-[11px] truncate">{u.email}</div>
+                          </div>
+                        </label>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {loading && (
             <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center gap-3">
               <Loader2 className="w-5 h-5 text-indigo-600 animate-spin flex-shrink-0" />
@@ -312,6 +510,7 @@ export default function AdminDashboard() {
   const [quizzes, setQuizzes] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [selectedQuizForAudience, setSelectedQuizForAudience] = useState(null)
   const [deleting, setDeleting] = useState(null)
   const [toggling, setToggling] = useState(null)
   const navigate = useNavigate()
@@ -463,54 +662,92 @@ export default function AdminDashboard() {
                   <th className="text-left px-6 py-3 text-gray-600 font-medium">Soal</th>
                   <th className="text-left px-6 py-3 text-gray-600 font-medium">Kesulitan</th>
                   <th className="text-left px-6 py-3 text-gray-600 font-medium">Timer</th>
+                  <th className="text-left px-6 py-3 text-gray-600 font-medium">Sasaran</th>
                   <th className="text-left px-6 py-3 text-gray-600 font-medium">Status</th>
                   <th className="text-left px-6 py-3 text-gray-600 font-medium">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {quizzes.map(quiz => (
-                  <tr key={quiz.id} className="hover:bg-gray-50 transition">
-                    <td className="px-6 py-4">
-                      <div className="font-semibold text-gray-800">{quiz.title}</div>
-                      {quiz.description && <div className="text-xs text-gray-400 truncate max-w-xs">{quiz.description}</div>}
-                    </td>
-                    <td className="px-6 py-4 text-gray-700">{quiz.question_count || 0}</td>
-                    <td className="px-6 py-4">
-                      <Badge color={diffColor[quiz.difficulty] || 'gray'}>
-                        {quiz.difficulty?.charAt(0).toUpperCase() + quiz.difficulty?.slice(1)}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">
-                      {quiz.timer_minutes ? `${quiz.timer_minutes} menit` : '—'}
-                    </td>
-                    <td className="px-6 py-4">
-                      <Badge color={quiz.is_published ? 'green' : 'yellow'}>
-                        {quiz.is_published ? 'Dipublikasi' : 'Draft'}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => navigate(`/admin/quiz/${quiz.id}`)}
-                          className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded" title="Lihat soal">
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => navigate(`/admin/quiz/${quiz.id}/results`)}
-                          className="p-1.5 text-blue-500 hover:bg-blue-50 rounded" title="Lihat hasil">
-                          <BarChart2 className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => handleTogglePublish(quiz.id)} disabled={toggling === quiz.id}
-                          className={`p-1.5 rounded ${quiz.is_published ? 'text-yellow-500 hover:bg-yellow-50' : 'text-green-500 hover:bg-green-50'}`}
-                          title={quiz.is_published ? 'Sembunyikan' : 'Publikasikan'}>
-                          {toggling === quiz.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                        </button>
-                        <button onClick={() => handleDelete(quiz.id)} disabled={deleting === quiz.id}
-                          className="p-1.5 text-red-400 hover:bg-red-50 rounded" title="Hapus">
-                          {deleting === quiz.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {quizzes.map(quiz => {
+                  const isSpecific = quiz.target_type === 'specific'
+                  let userCount = 0
+                  try {
+                    const raw = quiz.allowed_user_ids
+                    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+                    userCount = Array.isArray(parsed) ? parsed.length : 0
+                  } catch {
+                    userCount = 0
+                  }
+
+                  return (
+                    <tr key={quiz.id} className="hover:bg-gray-50 transition">
+                      <td className="px-6 py-4">
+                        <div className="font-semibold text-gray-800">{quiz.title}</div>
+                        {quiz.description && <div className="text-xs text-gray-400 truncate max-w-xs">{quiz.description}</div>}
+                      </td>
+                      <td className="px-6 py-4 text-gray-700">{quiz.question_count || 0}</td>
+                      <td className="px-6 py-4">
+                        <Badge color={diffColor[quiz.difficulty] || 'gray'}>
+                          {quiz.difficulty?.charAt(0).toUpperCase() + quiz.difficulty?.slice(1)}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 text-gray-600">
+                        {quiz.timer_minutes ? `${quiz.timer_minutes} menit` : '—'}
+                      </td>
+                      <td className="px-6 py-4">
+                        {isSpecific ? (
+                          <button
+                            onClick={() => setSelectedQuizForAudience(quiz)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 transition cursor-pointer"
+                            title="Klik untuk atur sasaran peserta"
+                          >
+                            <UserCheck className="w-3.5 h-3.5" />
+                            Khusus ({userCount} User)
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setSelectedQuizForAudience(quiz)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition cursor-pointer"
+                            title="Klik untuk atur sasaran peserta"
+                          >
+                            <Globe className="w-3.5 h-3.5" />
+                            Semua Peserta
+                          </button>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge color={quiz.is_published ? 'green' : 'yellow'}>
+                          {quiz.is_published ? 'Dipublikasi' : 'Draft'}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => navigate(`/admin/quiz/${quiz.id}`)}
+                            className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded" title="Lihat soal">
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => setSelectedQuizForAudience(quiz)}
+                            className="p-1.5 text-purple-600 hover:bg-purple-50 rounded" title="Atur sasaran peserta">
+                            <Users className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => navigate(`/admin/quiz/${quiz.id}/results`)}
+                            className="p-1.5 text-blue-500 hover:bg-blue-50 rounded" title="Lihat hasil">
+                            <BarChart2 className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => handleTogglePublish(quiz.id)} disabled={toggling === quiz.id}
+                            className={`p-1.5 rounded ${quiz.is_published ? 'text-yellow-500 hover:bg-yellow-50' : 'text-green-500 hover:bg-green-50'}`}
+                            title={quiz.is_published ? 'Sembunyikan' : 'Publikasikan'}>
+                            {toggling === quiz.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                          </button>
+                          <button onClick={() => handleDelete(quiz.id)} disabled={deleting === quiz.id}
+                            className="p-1.5 text-red-400 hover:bg-red-50 rounded" title="Hapus">
+                            {deleting === quiz.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -524,6 +761,16 @@ export default function AdminDashboard() {
             setShowModal(false)
             fetchQuizzes()
             navigate(`/admin/quiz/${data.quiz.id}`)
+          }}
+        />
+      )}
+
+      {selectedQuizForAudience && (
+        <AssignUsersModal
+          quiz={selectedQuizForAudience}
+          onClose={() => setSelectedQuizForAudience(null)}
+          onSuccess={(updated) => {
+            setQuizzes(qs => qs.map(q => q.id === updated.id ? { ...q, ...updated } : q))
           }}
         />
       )}

@@ -3,8 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { adminApi } from '../../api/axios'
 import {
   GraduationCap, ArrowLeft, Plus, Trash2, Edit3, RefreshCw, Save,
-  X, Loader2, CheckCircle, BookOpen, MessageSquare, ToggleLeft, BarChart2
+  X, Loader2, CheckCircle, BookOpen, MessageSquare, ToggleLeft, BarChart2,
+  Users, UserCheck, Globe
 } from 'lucide-react'
+import AssignUsersModal from '../../components/AssignUsersModal'
 
 const TYPE_LABELS = { pilihan_ganda: 'Pilihan Ganda', benar_salah: 'Benar/Salah', essay: 'Essay' }
 const TYPE_COLORS = { pilihan_ganda: 'blue', benar_salah: 'green', essay: 'purple' }
@@ -193,6 +195,7 @@ export default function QuizDetail() {
   const [loading, setLoading] = useState(true)
   const [editQ, setEditQ] = useState(null)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showAudienceModal, setShowAudienceModal] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
 
   const fetchData = useCallback(async () => {
@@ -246,6 +249,16 @@ export default function QuizDetail() {
     </div>
   )
 
+  const isSpecificAudience = quiz?.target_type === 'specific'
+  let audienceCount = 0
+  try {
+    const raw = quiz?.allowed_user_ids
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+    audienceCount = Array.isArray(parsed) ? parsed.length : 0
+  } catch {
+    audienceCount = 0
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Topbar */}
@@ -267,11 +280,32 @@ export default function QuizDetail() {
           <div className="bg-white rounded-2xl border shadow-sm p-6 mb-6">
             <h1 className="text-2xl font-bold text-gray-800 mb-2">{quiz.title}</h1>
             {quiz.description && <p className="text-gray-500 mb-4">{quiz.description}</p>}
-            <div className="flex flex-wrap gap-3 text-sm">
-              <span className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full">{questions.length} soal</span>
-              <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full capitalize">{quiz.difficulty}</span>
-              {quiz.timer_minutes && <span className="bg-orange-50 text-orange-700 px-3 py-1 rounded-full">{quiz.timer_minutes} menit</span>}
-              <span className={`px-3 py-1 rounded-full ${quiz.is_published ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <span className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full font-medium">{questions.length} soal</span>
+              <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full capitalize font-medium">{quiz.difficulty}</span>
+              {quiz.timer_minutes && <span className="bg-orange-50 text-orange-700 px-3 py-1 rounded-full font-medium">{quiz.timer_minutes} menit</span>}
+              <button
+                onClick={() => setShowAudienceModal(true)}
+                className={`px-3 py-1 rounded-full flex items-center gap-1.5 transition text-xs font-semibold cursor-pointer border ${
+                  isSpecificAudience
+                    ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
+                    : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                }`}
+                title="Klik untuk ubah sasaran peserta"
+              >
+                {isSpecificAudience ? (
+                  <>
+                    <UserCheck className="w-3.5 h-3.5" />
+                    Sasaran: Khusus ({audienceCount} User)
+                  </>
+                ) : (
+                  <>
+                    <Globe className="w-3.5 h-3.5" />
+                    Sasaran: Semua Peserta
+                  </>
+                )}
+              </button>
+              <span className={`px-3 py-1 rounded-full font-medium ${quiz.is_published ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
                 {quiz.is_published ? 'Dipublikasi' : 'Draft'}
               </span>
             </div>
@@ -283,6 +317,10 @@ export default function QuizDetail() {
           <button onClick={() => setShowAddModal(true)}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">
             <Plus className="w-4 h-4" /> Tambah Soal Manual
+          </button>
+          <button onClick={() => setShowAudienceModal(true)}
+            className="flex items-center gap-2 border border-purple-300 text-purple-700 hover:bg-purple-50 px-4 py-2 rounded-lg text-sm font-medium transition">
+            <Users className="w-4 h-4" /> Atur Sasaran Peserta
           </button>
           <button onClick={handleRegenerate} disabled={regenerating}
             className="flex items-center gap-2 border border-indigo-300 text-indigo-600 hover:bg-indigo-50 px-4 py-2 rounded-lg text-sm transition disabled:opacity-60">
@@ -313,6 +351,15 @@ export default function QuizDetail() {
       )}
       {showAddModal && (
         <EditModal question={null} onClose={() => setShowAddModal(false)} onSave={handleSaveEdit} />
+      )}
+      {showAudienceModal && quiz && (
+        <AssignUsersModal
+          quiz={quiz}
+          onClose={() => setShowAudienceModal(false)}
+          onSuccess={(updated) => {
+            setQuiz(prev => ({ ...prev, ...updated }))
+          }}
+        />
       )}
     </div>
   )

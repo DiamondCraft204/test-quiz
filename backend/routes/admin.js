@@ -32,6 +32,18 @@ const upload = multer({
   },
 });
 
+// ─── GET /api/admin/users ─────────────────────────────────────────────────────
+router.get('/users', async (req, res, next) => {
+  try {
+    const result = await db.query(
+      'SELECT id, name, email, created_at FROM users ORDER BY name ASC'
+    );
+    return res.json({ success: true, data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── GET /api/admin/quizzes ───────────────────────────────────────────────────
 router.get('/quizzes', async (req, res, next) => {
   try {
@@ -60,6 +72,10 @@ router.post('/quizzes', upload.single('material'), async (req, res, next) => {
       difficulty = 'sedang',
       questionTypes,
       typeCounts,
+      targetType = 'all',
+      target_type,
+      allowedUserIds,
+      allowed_user_ids,
     } = req.body;
 
     if (!title) {
@@ -126,11 +142,27 @@ router.post('/quizzes', upload.single('material'), async (req, res, next) => {
       return res.status(502).json({ success: false, message: err.message });
     }
 
+    const finalTargetType = (target_type || targetType || 'all') === 'specific' ? 'specific' : 'all';
+    let finalAllowedUserIds = [];
+    const rawAllowed = allowed_user_ids || allowedUserIds;
+    if (rawAllowed) {
+      try {
+        finalAllowedUserIds = typeof rawAllowed === 'string' ? JSON.parse(rawAllowed) : rawAllowed;
+      } catch {
+        finalAllowedUserIds = [];
+      }
+    }
+    if (!Array.isArray(finalAllowedUserIds)) {
+      finalAllowedUserIds = [];
+    }
+    // Clean user ids to numbers
+    finalAllowedUserIds = finalAllowedUserIds.map(Number).filter(id => !isNaN(id) && id > 0);
+
     // Save quiz to PostgreSQL
     const quizResult = await db.query(
       `INSERT INTO quizzes 
-        (title, description, material_filename, material_text, num_questions, timer_minutes, difficulty, question_types)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        (title, description, material_filename, material_text, num_questions, timer_minutes, difficulty, question_types, target_type, allowed_user_ids)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
       [
         title,
@@ -141,6 +173,8 @@ router.post('/quizzes', upload.single('material'), async (req, res, next) => {
         timerMinutes ? parseInt(timerMinutes, 10) : null,
         difficulty,
         JSON.stringify(finalTypes),
+        finalTargetType,
+        JSON.stringify(finalAllowedUserIds),
       ]
     );
 
@@ -194,7 +228,18 @@ router.get('/quizzes/:id', async (req, res, next) => {
 // ─── PUT /api/admin/quizzes/:id ───────────────────────────────────────────────
 router.put('/quizzes/:id', async (req, res, next) => {
   try {
-    const { title, description, timerMinutes, difficulty, numQuestions, questionTypes } = req.body;
+    const {
+      title,
+      description,
+      timerMinutes,
+      difficulty,
+      numQuestions,
+      questionTypes,
+      targetType,
+      target_type,
+      allowedUserIds,
+      allowed_user_ids,
+    } = req.body;
 
     const quizRes = await db.query('SELECT * FROM quizzes WHERE id = $1', [req.params.id]);
     if (quizRes.rows.length === 0) {
@@ -209,15 +254,75 @@ router.put('/quizzes/:id', async (req, res, next) => {
     const updatedNumQ = numQuestions !== undefined ? parseInt(numQuestions, 10) : quiz.num_questions;
     const updatedTypes = questionTypes !== undefined ? (typeof questionTypes === 'string' ? questionTypes : JSON.stringify(questionTypes)) : quiz.question_types;
 
+    let updatedTargetType = quiz.target_type || 'all';
+    if (target_type !== undefined || targetType !== undefined) {
+      const t = target_type !== undefined ? target_type : targetType;
+      updatedTargetType = t === 'specific' ? 'specific' : 'all';
+    }
+
+    let updatedAllowedUserIds = quiz.allowed_user_ids || '[]';
+    if (allowed_user_ids !== undefined || allowedUserIds !== undefined) {
+      const raw = allowed_user_ids !== undefined ? allowed_user_ids : allowedUserIds;
+      let parsed = [];
+      try {
+        parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      } catch {
+        parsed = [];
+      }
+      if (!Array.isArray(parsed)) parsed = [];
+      updatedAllowedUserIds = JSON.stringify(parsed.map(Number).filter(id => !isNaN(id) && id > 0));
+    }
+
     const updatedRes = await db.query(
       `UPDATE quizzes
-       SET title = $1, description = $2, timer_minutes = $3, difficulty = $4, num_questions = $5, question_types = $6
-       WHERE id = $7
+       SET title = $1, description = $2, timer_minutes = $3, difficulty = $4, num_questions = $5, question_types = $6, target_type = $7, allowed_user_ids = $8
+       WHERE id = $9
        RETURNING *`,
-      [updatedTitle, updatedDescription, updatedTimer, updatedDifficulty, updatedNumQ, updatedTypes, req.params.id]
+      [updatedTitle, updatedDescription, updatedTimer, updatedDifficulty, updatedNumQ, updatedTypes, updatedTargetType, updatedAllowedUserIds, req.params.id]
     );
 
     return res.json({ success: true, message: 'Kuis berhasil diperbarui.', data: updatedRes.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── PUT /api/admin/quizzes/:id/audience ─────────────────────────────────────
+router.put('/quizzes/:id/audience', async (req, res, next) => {
+  try {
+    const { targetType = 'all', allowedUserIds = [] } = req.body;
+
+    const quizRes = await db.query('SELECT id FROM quizzes WHERE id = $1', [req.params.id]);
+    if (quizRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Kuis tidak ditemukan.' });
+    }
+
+    const finalTargetType = targetType === 'specific' ? 'specific' : 'all';
+    let cleanUserIds = [];
+    if (Array.isArray(allowedUserIds)) {
+      cleanUserIds = allowedUserIds.map(Number).filter(id => !isNaN(id) && id > 0);
+    } else if (typeof allowedUserIds === 'string') {
+      try {
+        const parsed = JSON.parse(allowedUserIds);
+        cleanUserIds = Array.isArray(parsed) ? parsed.map(Number).filter(id => !isNaN(id) && id > 0) : [];
+      } catch {
+        cleanUserIds = [];
+      }
+    }
+
+    const updatedRes = await db.query(
+      `UPDATE quizzes
+       SET target_type = $1, allowed_user_ids = $2
+       WHERE id = $3
+       RETURNING id, title, target_type, allowed_user_ids`,
+      [finalTargetType, JSON.stringify(cleanUserIds), req.params.id]
+    );
+
+    return res.json({
+      success: true,
+      message: 'Konfigurasi sasaran peserta berhasil diperbarui.',
+      data: updatedRes.rows[0],
+    });
   } catch (err) {
     next(err);
   }
