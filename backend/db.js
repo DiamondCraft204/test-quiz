@@ -112,6 +112,7 @@ const initDB = async () => {
     ALTER TABLE submissions ADD COLUMN IF NOT EXISTS cheat_violations INT DEFAULT 0;
     ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS target_type TEXT DEFAULT 'all';
     ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS allowed_user_ids TEXT DEFAULT '[]';
+    ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS essay_weight REAL DEFAULT 2;
   `;
 
   try {

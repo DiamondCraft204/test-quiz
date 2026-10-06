@@ -68,7 +68,7 @@ router.get('/submissions/my', authenticateUser, async (req, res, next) => {
 router.get('/submissions/:id', authenticateUser, async (req, res, next) => {
   try {
     const subRes = await db.query(
-      `SELECT s.*, q.title AS quiz_title
+      `SELECT s.*, q.title AS quiz_title, q.essay_weight
        FROM submissions s
        JOIN quizzes q ON q.id = s.quiz_id
        WHERE s.id = $1`,
@@ -101,6 +101,7 @@ router.get('/submissions/:id', authenticateUser, async (req, res, next) => {
 
     const questionMap = {};
     questions.forEach((q) => { questionMap[q.id] = q; });
+    const quizEssayWeight = submission.essay_weight ? parseFloat(submission.essay_weight) : 2;
     const enrichedAnswers = parsedAnswers.map((a) => {
       const q = questionMap[a.questionId] || {};
       const isEssay = (a.questionType || q.type) === 'essay';
@@ -114,6 +115,7 @@ router.get('/submissions/:id', authenticateUser, async (req, res, next) => {
         correctAnswer: a.correctAnswer || q.correct_answer || '',
         explanation: a.explanation || q.explanation || '',
         questionType: a.questionType || q.type || (isEssay ? 'essay' : 'pilihan_ganda'),
+        weight: a.weight !== undefined ? a.weight : (isEssay ? quizEssayWeight : 1),
         score,
       };
     });
@@ -144,7 +146,7 @@ router.get('/:id', authenticateUser, async (req, res, next) => {
   try {
     const quizRes = await db.query(
       `SELECT id, title, description, num_questions, timer_minutes,
-              difficulty, question_types, target_type, allowed_user_ids, is_published, created_at
+              difficulty, question_types, target_type, allowed_user_ids, essay_weight, is_published, created_at
        FROM quizzes
        WHERE id = $1 AND is_published = 1`,
       [req.params.id]
@@ -302,22 +304,25 @@ router.post('/:id/submit', authenticateUser, async (req, res, next) => {
       }
     }
 
-    let earnedPoints = 0;
+    const essayWeight = quiz.essay_weight !== undefined && quiz.essay_weight !== null ? Math.max(0.1, parseFloat(quiz.essay_weight) || 1) : 2;
+    let earnedWeightedPoints = 0;
+    let totalMaxWeight = 0;
     let fullCorrectCount = 0;
 
     const gradedAnswers = answers.map((a) => {
       const question = questionMap[a.questionId];
       if (!question) {
-        return { ...a, isCorrect: false, score: 0, correctAnswer: null, explanation: null, needsReview: false };
+        return { ...a, isCorrect: false, score: 0, correctAnswer: null, explanation: null, needsReview: false, weight: 1 };
       }
 
       const isEssay = question.type === 'essay';
+      const weight = isEssay ? essayWeight : 1;
+      totalMaxWeight += weight;
 
       if (isEssay) {
         const evalRes = essayEvaluations[question.id] || { score: 0, feedback: '', isCorrect: false };
         const score = Math.max(0, Math.min(100, Math.round(evalRes.score || 0)));
-        const questionPoints = score / 100; // 0.0 to 1.0
-        earnedPoints += questionPoints;
+        earnedWeightedPoints += (score / 100) * weight;
         if (score >= 70) fullCorrectCount++;
 
         return {
@@ -331,13 +336,14 @@ router.post('/:id/submit', authenticateUser, async (req, res, next) => {
           correctAnswer: question.correct_answer,
           explanation: question.explanation,
           questionType: question.type,
+          weight,
         };
       } else {
         const userAnswer = (a.answer || '').trim().toLowerCase();
         const correctAnswer = (question.correct_answer || '').trim().toLowerCase();
         const isCorrect = userAnswer === correctAnswer;
         if (isCorrect) {
-          earnedPoints += 1;
+          earnedWeightedPoints += 1 * weight;
           fullCorrectCount++;
         }
 
@@ -351,17 +357,17 @@ router.post('/:id/submit', authenticateUser, async (req, res, next) => {
           correctAnswer: question.correct_answer,
           explanation: question.explanation,
           questionType: question.type,
+          weight,
         };
       }
     });
 
-    const totalQuestions = questions.length || answers.length || 1;
-    const baseScore = (earnedPoints / totalQuestions) * 100;
+    const baseScore = totalMaxWeight > 0 ? (earnedWeightedPoints / totalMaxWeight) * 100 : 0;
 
     // Anti-cheat penalty: -5 points per violation
     const violationCount = Math.max(0, parseInt(cheatViolations, 10) || 0);
     const penaltyPoints = violationCount * 5;
-    const finalScore = Math.max(0, Math.round((baseScore - penaltyPoints) * 10) / 10);
+    const finalScore = Math.max(0, Math.min(100, Math.round((baseScore - penaltyPoints) * 10) / 10));
 
     const subInsert = await db.query(
       `INSERT INTO submissions (quiz_id, user_id, answers, score, total_questions, correct_count, time_taken, cheat_violations)

@@ -4,7 +4,7 @@ import { adminApi } from '../../api/axios'
 import {
   GraduationCap, Plus, LogOut, BookOpen, Users, CheckCircle, XCircle,
   Trash2, Eye, BarChart2, Upload, Loader2, X, ChevronDown, RefreshCw, Settings, FileQuestion,
-  UserCheck, Globe, Search, UserPlus
+  UserCheck, Globe, Search, UserPlus, Scale
 } from 'lucide-react'
 import AssignUsersModal from '../../components/AssignUsersModal'
 
@@ -42,6 +42,11 @@ function CreateQuizModal({ onClose, onSuccess }) {
   const [error, setError] = useState('')
   const [progress, setProgress] = useState('')
   const fileRef = useRef()
+
+  // Essay weight configuration
+  const [essayWeight, setEssayWeight] = useState(2)
+  const [isCustomWeight, setIsCustomWeight] = useState(false)
+  const [customWeight, setCustomWeight] = useState('')
 
   // Target audience configuration
   const [targetType, setTargetType] = useState('all') // 'all' or 'specific'
@@ -156,6 +161,9 @@ function CreateQuizModal({ onClose, onSuccess }) {
       fd.append('targetType', targetType)
       fd.append('allowedUserIds', JSON.stringify(selectedUserIds))
       if (form.useTimer && form.timerMinutes) fd.append('timerMinutes', form.timerMinutes)
+
+      const finalEssayWeight = isCustomWeight && customWeight ? parseFloat(customWeight) : essayWeight
+      fd.append('essayWeight', finalEssayWeight || 2)
 
       const breakdownSummary = Object.entries(typeCounts)
         .map(([k, c]) => `${c} ${k === 'pilihan_ganda' ? 'PG' : k === 'benar_salah' ? 'B/S' : 'Essay'}`)
@@ -331,6 +339,82 @@ function CreateQuizModal({ onClose, onSuccess }) {
               })}
             </div>
           </div>
+
+          {/* Essay Weight Configuration (Shown when essay question is enabled) */}
+          {typeConfigs.essay?.enabled && (
+            <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="block text-sm font-bold text-amber-950 flex items-center gap-1.5">
+                    <Scale className="w-4 h-4 text-amber-600" />
+                    Bobot Penilaian Soal Esai
+                  </label>
+                  <p className="text-xs text-amber-800/80 mt-0.5">
+                    Tentukan seberapa tinggi poin soal esai dalam nilai akhir (soal PG & Benar-Salah memiliki bobot 1x)
+                  </p>
+                </div>
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-200 text-amber-900 border border-amber-300">
+                  {isCustomWeight ? `${customWeight || 2}x` : `${essayWeight}x`} Nilai
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
+                {[
+                  { val: 1, label: '1x', desc: 'Sama Rata' },
+                  { val: 1.5, label: '1.5x', desc: 'Agak Tinggi' },
+                  { val: 2, label: '2x', desc: 'Standar (2x PG)' },
+                  { val: 3, label: '3x', desc: 'Tinggi (3x PG)' },
+                ].map((item) => (
+                  <button
+                    key={item.val}
+                    type="button"
+                    onClick={() => {
+                      setIsCustomWeight(false)
+                      setEssayWeight(item.val)
+                    }}
+                    className={`p-2 rounded-xl border text-center transition ${
+                      !isCustomWeight && essayWeight === item.val
+                        ? 'border-amber-500 bg-amber-100/90 text-amber-950 font-bold ring-2 ring-amber-500/20 shadow-xs'
+                        : 'border-amber-200 bg-white hover:bg-amber-50 text-gray-700'
+                    }`}
+                  >
+                    <div className="text-sm font-bold">{item.label}</div>
+                    <div className="text-[10px] text-gray-500">{item.desc}</div>
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={() => setIsCustomWeight(true)}
+                  className={`p-2 rounded-xl border text-center transition ${
+                    isCustomWeight
+                      ? 'border-amber-500 bg-amber-100/90 text-amber-950 font-bold ring-2 ring-amber-500/20 shadow-xs'
+                      : 'border-amber-200 bg-white hover:bg-amber-50 text-gray-700'
+                  }`}
+                >
+                  <div className="text-sm font-bold">Kustom</div>
+                  <div className="text-[10px] text-gray-500">Atur Angka</div>
+                </button>
+              </div>
+
+              {isCustomWeight && (
+                <div className="pt-2 flex items-center gap-2">
+                  <span className="text-xs font-semibold text-amber-900">Pengali Bobot:</span>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0.5"
+                    max="10"
+                    value={customWeight}
+                    onChange={(e) => setCustomWeight(e.target.value)}
+                    placeholder="Contoh: 2.5 atau 4"
+                    className="w-32 text-sm border border-amber-300 rounded-lg px-3 py-1.5 bg-white text-gray-900 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                  <span className="text-xs text-amber-800">kali lipat poin pilihan ganda</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Target Audience Configuration */}
           <div className="bg-gray-50/80 border border-gray-200 rounded-xl p-4 space-y-3">

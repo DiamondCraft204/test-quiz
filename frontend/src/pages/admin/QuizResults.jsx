@@ -4,7 +4,7 @@ import { adminApi } from '../../api/axios'
 import { 
   ArrowLeft, GraduationCap, Loader2, Users, Trophy, Clock, 
   TrendingUp, ChevronDown, ChevronUp, CheckCircle, Edit3, 
-  X, Save, AlertCircle, Check, MessageSquare
+  X, Save, AlertCircle, Check, MessageSquare, Scale
 } from 'lucide-react'
 
 function formatTime(seconds) {
@@ -347,6 +347,16 @@ export default function QuizResults() {
                                   <span className="text-xs px-2 py-0.5 rounded font-medium bg-gray-100 text-gray-600">
                                     {typeBadge}
                                   </span>
+                                  {isEssay ? (
+                                    <span className="text-xs px-2 py-0.5 rounded font-bold bg-amber-100 text-amber-900 border border-amber-200 flex items-center gap-1">
+                                      <Scale className="w-3 h-3 text-amber-700" />
+                                      Bobot: {a.weight || (data?.quiz?.essay_weight || 2)}x
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs px-2 py-0.5 rounded text-gray-500 bg-gray-100">
+                                      Bobot: 1x
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <span className={`text-xs px-2.5 py-1 rounded-full font-bold border ${scoreBadge.bg}`}>
@@ -538,13 +548,24 @@ export default function QuizResults() {
             </div>
 
             <form onSubmit={handleSaveQuestionScore} className="p-6 space-y-4 overflow-y-auto flex-1">
-              <div>
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1">
-                  Peserta
-                </span>
-                <span className="font-bold text-gray-800">
-                  {editingQuestionModal.submission.user_name}
-                </span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-0.5">
+                    Peserta
+                  </span>
+                  <span className="font-bold text-gray-800">
+                    {editingQuestionModal.submission.user_name}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-0.5">
+                    Bobot Soal Ini
+                  </span>
+                  <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-1">
+                    <Scale className="w-3 h-3 text-amber-700" />
+                    {editingQuestionModal.answerItem.weight || (editingQuestionModal.answerItem.questionType === 'essay' ? (data?.quiz?.essay_weight || 2) : 1)}x Poin
+                  </span>
+                </div>
               </div>
 
               {/* Soal */}

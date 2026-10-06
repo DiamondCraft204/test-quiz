@@ -76,6 +76,8 @@ router.post('/quizzes', upload.single('material'), async (req, res, next) => {
       target_type,
       allowedUserIds,
       allowed_user_ids,
+      essayWeight,
+      essay_weight,
     } = req.body;
 
     if (!title) {
@@ -158,11 +160,14 @@ router.post('/quizzes', upload.single('material'), async (req, res, next) => {
     // Clean user ids to numbers
     finalAllowedUserIds = finalAllowedUserIds.map(Number).filter(id => !isNaN(id) && id > 0);
 
+    const parsedEssayWeight = parseFloat(essayWeight || essay_weight);
+    const finalEssayWeight = (!isNaN(parsedEssayWeight) && parsedEssayWeight > 0) ? parsedEssayWeight : 2;
+
     // Save quiz to PostgreSQL
     const quizResult = await db.query(
       `INSERT INTO quizzes 
-        (title, description, material_filename, material_text, num_questions, timer_minutes, difficulty, question_types, target_type, allowed_user_ids)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        (title, description, material_filename, material_text, num_questions, timer_minutes, difficulty, question_types, target_type, allowed_user_ids, essay_weight)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
       [
         title,
@@ -175,6 +180,7 @@ router.post('/quizzes', upload.single('material'), async (req, res, next) => {
         JSON.stringify(finalTypes),
         finalTargetType,
         JSON.stringify(finalAllowedUserIds),
+        finalEssayWeight,
       ]
     );
 
@@ -239,6 +245,8 @@ router.put('/quizzes/:id', async (req, res, next) => {
       target_type,
       allowedUserIds,
       allowed_user_ids,
+      essayWeight,
+      essay_weight,
     } = req.body;
 
     const quizRes = await db.query('SELECT * FROM quizzes WHERE id = $1', [req.params.id]);
@@ -253,6 +261,14 @@ router.put('/quizzes/:id', async (req, res, next) => {
     const updatedDifficulty = difficulty !== undefined ? difficulty : quiz.difficulty;
     const updatedNumQ = numQuestions !== undefined ? parseInt(numQuestions, 10) : quiz.num_questions;
     const updatedTypes = questionTypes !== undefined ? (typeof questionTypes === 'string' ? questionTypes : JSON.stringify(questionTypes)) : quiz.question_types;
+
+    let updatedEssayWeight = quiz.essay_weight !== undefined && quiz.essay_weight !== null ? parseFloat(quiz.essay_weight) : 2;
+    if (essayWeight !== undefined || essay_weight !== undefined) {
+      const ew = parseFloat(essayWeight !== undefined ? essayWeight : essay_weight);
+      if (!isNaN(ew) && ew > 0) {
+        updatedEssayWeight = ew;
+      }
+    }
 
     let updatedTargetType = quiz.target_type || 'all';
     if (target_type !== undefined || targetType !== undefined) {
@@ -275,10 +291,10 @@ router.put('/quizzes/:id', async (req, res, next) => {
 
     const updatedRes = await db.query(
       `UPDATE quizzes
-       SET title = $1, description = $2, timer_minutes = $3, difficulty = $4, num_questions = $5, question_types = $6, target_type = $7, allowed_user_ids = $8
-       WHERE id = $9
+       SET title = $1, description = $2, timer_minutes = $3, difficulty = $4, num_questions = $5, question_types = $6, target_type = $7, allowed_user_ids = $8, essay_weight = $9
+       WHERE id = $10
        RETURNING *`,
-      [updatedTitle, updatedDescription, updatedTimer, updatedDifficulty, updatedNumQ, updatedTypes, updatedTargetType, updatedAllowedUserIds, req.params.id]
+      [updatedTitle, updatedDescription, updatedTimer, updatedDifficulty, updatedNumQ, updatedTypes, updatedTargetType, updatedAllowedUserIds, updatedEssayWeight, req.params.id]
     );
 
     return res.json({ success: true, message: 'Kuis berhasil diperbarui.', data: updatedRes.rows[0] });
@@ -402,6 +418,10 @@ router.get('/quizzes/:id/results', async (req, res, next) => {
         parsedAnswers = [];
       }
 
+      const essayWeight = quizRes.rows[0]?.essay_weight !== undefined && quizRes.rows[0]?.essay_weight !== null
+        ? parseFloat(quizRes.rows[0].essay_weight)
+        : 2;
+
       const answersWithDetails = (parsedAnswers || []).map((a) => {
         const q = questionMap[a.questionId] || {};
         const isEssay = (a.questionType || q.type) === 'essay';
@@ -415,6 +435,7 @@ router.get('/quizzes/:id/results', async (req, res, next) => {
           correctAnswer: a.correctAnswer || q.correct_answer || '',
           explanation: a.explanation || q.explanation || '',
           questionType: a.questionType || q.type || (isEssay ? 'essay' : 'pilihan_ganda'),
+          weight: a.weight !== undefined ? a.weight : (isEssay ? essayWeight : 1),
           score,
         };
       });
@@ -463,14 +484,25 @@ router.put('/submissions/:id', async (req, res, next) => {
       if (parsedAnswers) {
         newAnswersStr = JSON.stringify(parsedAnswers);
 
-        // If score was not explicitly overridden, recalculate from answers
+        // If score was not explicitly overridden, recalculate from answers taking weights into account
         if (score === undefined) {
-          const totalQ = currentSub.total_questions || parsedAnswers.length || 1;
-          const sumPoints = parsedAnswers.reduce((sum, a) => {
+          const quizWeightRes = await db.query('SELECT essay_weight FROM quizzes WHERE id = $1', [currentSub.quiz_id]);
+          const essayWeight = quizWeightRes.rows.length > 0 && quizWeightRes.rows[0].essay_weight !== null
+            ? parseFloat(quizWeightRes.rows[0].essay_weight)
+            : 2;
+
+          let totalMaxWeight = 0;
+          let earnedWeightedPoints = 0;
+
+          parsedAnswers.forEach((a) => {
+            const isEssay = a.questionType === 'essay';
+            const weight = a.weight !== undefined ? a.weight : (isEssay ? essayWeight : 1);
+            totalMaxWeight += weight;
             const qScore = a.score !== undefined ? a.score : (a.isCorrect ? 100 : 0);
-            return sum + (qScore / 100);
-          }, 0);
-          const baseScore = (sumPoints / totalQ) * 100;
+            earnedWeightedPoints += (qScore / 100) * weight;
+          });
+
+          const baseScore = totalMaxWeight > 0 ? (earnedWeightedPoints / totalMaxWeight) * 100 : 0;
           const penalty = (currentSub.cheat_violations || 0) * 5;
           newScore = Math.max(0, Math.min(100, Math.round((baseScore - penalty) * 10) / 10));
         }
