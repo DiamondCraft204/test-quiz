@@ -52,7 +52,7 @@ export default function UserLogin() {
             <span className="text-2xl font-bold">Ruang tugas</span>
           </div>
           <h2 className="text-2xl font-bold text-gray-800">Masuk</h2>
-          <p className="text-gray-500 text-sm mt-1">Masuk untuk mengikuti kuis</p>
+          <p className="text-gray-500 text-sm mt-1">Masuk untuk mengerjakan tugas</p>
         </div>
 
         {notice && (

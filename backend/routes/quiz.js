@@ -153,7 +153,7 @@ router.get('/:id', authenticateUser, async (req, res, next) => {
     );
 
     if (quizRes.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Kuis tidak ditemukan atau belum dipublikasikan.' });
+      return res.status(404).json({ success: false, message: 'Tugas tidak ditemukan atau belum dipublikasikan.' });
     }
 
     const quiz = quizRes.rows[0];
@@ -172,7 +172,7 @@ router.get('/:id', authenticateUser, async (req, res, next) => {
         return res.status(403).json({
           success: false,
           code: 'QUIZ_ACCESS_RESTRICTED',
-          message: 'Kuis ini bersifat terbatas dan hanya dapat diakses oleh peserta tertentu yang telah ditentukan oleh admin.',
+          message: 'Tugas ini bersifat terbatas dan hanya dapat diakses oleh peserta tertentu yang telah ditentukan oleh admin.',
         });
       }
     }
@@ -237,7 +237,7 @@ router.post('/:id/submit', authenticateUser, async (req, res, next) => {
 
     const quizRes = await db.query('SELECT * FROM quizzes WHERE id = $1 AND is_published = 1', [req.params.id]);
     if (quizRes.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Kuis tidak ditemukan atau belum dipublikasikan.' });
+      return res.status(404).json({ success: false, message: 'Tugas tidak ditemukan atau belum dipublikasikan.' });
     }
 
     const quiz = quizRes.rows[0];
@@ -256,7 +256,7 @@ router.post('/:id/submit', authenticateUser, async (req, res, next) => {
         return res.status(403).json({
           success: false,
           code: 'QUIZ_ACCESS_RESTRICTED',
-          message: 'Anda tidak memiliki hak akses untuk mengerjakan atau mengumpulkan kuis ini.',
+          message: 'Anda tidak memiliki hak akses untuk mengerjakan atau mengumpulkan tugas ini.',
         });
       }
     }
@@ -270,7 +270,7 @@ router.post('/:id/submit', authenticateUser, async (req, res, next) => {
       return res.status(400).json({
         success: false,
         code: 'ALREADY_SUBMITTED',
-        message: 'Anda sudah menyelesaikan kuis ini dan tidak dapat mengerjakan ulang (hanya 1x pengerjaan).',
+        message: 'Anda sudah menyelesaikan tugas ini dan tidak dapat mengerjakan ulang (hanya 1x pengerjaan).',
         submissionId: existingSub.rows[0].id,
       });
     }
@@ -389,7 +389,7 @@ router.post('/:id/submit', authenticateUser, async (req, res, next) => {
 
     return res.status(201).json({
       success: true,
-      message: 'Kuis berhasil dikumpulkan.',
+      message: 'Tugas berhasil dikumpulkan.',
       data: {
         submission: {
           ...submission,

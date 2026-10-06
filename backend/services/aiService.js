@@ -51,7 +51,7 @@ const generateQuestions = async (materialText, config) => {
 
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-  const prompt = `Kamu adalah pembuat soal ujian profesional yang ahli. Buatkan tepat ${targetCount} butir soal kuis dalam Bahasa Indonesia berdasarkan materi berikut.
+  const prompt = `Kamu adalah pembuat soal ujian profesional yang ahli. Buatkan tepat ${targetCount} butir soal tugas dalam Bahasa Indonesia berdasarkan materi berikut.
 
 Pengaturan:
 - Total soal yang HARUS dibuat: tepat ${targetCount} butir soal.

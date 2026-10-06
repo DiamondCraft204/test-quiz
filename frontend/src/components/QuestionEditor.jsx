@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2, AlertCircle } from 'lucide-react';
 
 const QUESTION_TYPES = [
@@ -203,7 +203,7 @@ const QuestionEditor = ({ question, onSave, onClose, quizId }) => {
                 value={form.explanation}
                 onChange={e => setForm(prev => ({ ...prev, explanation: e.target.value }))}
                 rows={2}
-                placeholder="Penjelasan jawaban yang ditampilkan setelah selesai kuis..."
+                placeholder="Penjelasan jawaban yang ditampilkan setelah selesai tugas..."
                 className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm resize-none"
               />
             </div>

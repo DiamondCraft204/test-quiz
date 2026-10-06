@@ -136,7 +136,7 @@ function CreateQuizModal({ onClose, onSuccess }) {
       return;
     }
     if (targetType === 'specific' && selectedUserIds.length === 0) {
-      setError('Pilih minimal 1 akun peserta untuk kuis bertipe khusus.');
+      setError('Pilih minimal 1 akun peserta untuk tugas bertipe khusus.');
       return;
     }
 
@@ -181,7 +181,7 @@ function CreateQuizModal({ onClose, onSuccess }) {
       } else if (err.response?.status === 504) {
         setError('Waktu pemrosesan melebihi batas timeout Vercel. Coba gunakan materi yang lebih ringkas.');
       } else {
-        setError(err.response?.data?.message || err.message || 'Gagal membuat kuis.');
+        setError(err.response?.data?.message || err.message || 'Gagal membuat tugas.');
       }
     } finally {
       setLoading(false)
@@ -194,7 +194,7 @@ function CreateQuizModal({ onClose, onSuccess }) {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl my-4">
         <div className="flex items-center justify-between p-6 border-b">
           <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            <BookOpen className="w-5 h-5 text-indigo-600" /> Buat Kuis Baru
+            <BookOpen className="w-5 h-5 text-indigo-600" /> Buat Tugas Baru
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
         </div>
@@ -204,16 +204,16 @@ function CreateQuizModal({ onClose, onSuccess }) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Judul Kuis *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Judul Tugas *</label>
               <input required value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                placeholder="Contoh: Kuis Sejarah Indonesia" />
+                placeholder="Contoh: Tugas Sejarah Indonesia" />
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Deskripsi</label>
               <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                rows={2} placeholder="Deskripsi singkat tentang kuis ini" />
+                rows={2} placeholder="Deskripsi singkat tentang tugas ini" />
             </div>
           </div>
 
@@ -420,10 +420,10 @@ function CreateQuizModal({ onClose, onSuccess }) {
           <div className="bg-gray-50/80 border border-gray-200 rounded-xl p-4 space-y-3">
             <div>
               <label className="block text-sm font-bold text-gray-800">
-                Sasaran Peserta Kuis
+                Sasaran Peserta Tugas
               </label>
               <p className="text-xs text-gray-500 mt-0.5">
-                Pilih apakah kuis ini untuk semua user atau hanya akun peserta tertentu dari database
+                Pilih apakah tugas ini untuk semua user atau hanya akun peserta tertentu dari database
               </p>
             </div>
 
@@ -449,7 +449,7 @@ function CreateQuizModal({ onClose, onSuccess }) {
                     Semua Peserta (Publik)
                   </div>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    Semua akun user yang terdaftar di database dapat melihat dan mengerjakan kuis ini.
+                    Semua akun user yang terdaftar di database dapat melihat dan mengerjakan tugas ini.
                   </p>
                 </div>
               </div>
@@ -619,12 +619,12 @@ export default function AdminDashboard() {
   useEffect(() => { fetchQuizzes() }, [fetchQuizzes])
 
   const handleDelete = async (id) => {
-    if (!confirm('Yakin ingin menghapus kuis ini? Semua soal dan hasil peserta akan ikut terhapus.')) return
+    if (!confirm('Yakin ingin menghapus tugas ini? Semua soal dan hasil peserta akan ikut terhapus.')) return
     setDeleting(id)
     try {
       await adminApi.delete(`/admin/quizzes/${id}`)
       setQuizzes(qs => qs.filter(q => q.id !== id))
-    } catch { alert('Gagal menghapus kuis.') } finally { setDeleting(null) }
+    } catch { alert('Gagal menghapus tugas.') } finally { setDeleting(null) }
   }
 
   const handleTogglePublish = async (id) => {
@@ -632,7 +632,7 @@ export default function AdminDashboard() {
     try {
       const res = await adminApi.post(`/admin/quizzes/${id}/publish`)
       setQuizzes(qs => qs.map(q => q.id === id ? { ...q, is_published: res.data.data.is_published } : q))
-    } catch { alert('Gagal mengubah status kuis.') } finally { setToggling(null) }
+    } catch { alert('Gagal mengubah status tugas.') } finally { setToggling(null) }
   }
 
   const diffColor = { mudah: 'green', sedang: 'blue', sulit: 'red' }
@@ -656,8 +656,8 @@ export default function AdminDashboard() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">Manajemen Kuis</h1>
-            <p className="text-gray-500 text-sm mt-1">{quizzes.length} kuis tersimpan</p>
+            <h1 className="text-2xl font-bold text-gray-800">Manajemen Tugas</h1>
+            <p className="text-gray-500 text-sm mt-1">{quizzes.length} tugas tersimpan</p>
           </div>
           <div className="flex gap-2">
             <button onClick={fetchQuizzes}
@@ -666,7 +666,7 @@ export default function AdminDashboard() {
             </button>
             <button onClick={() => setShowModal(true)}
               className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition text-sm font-semibold">
-              <Plus className="w-4 h-4" /> Buat Kuis Baru
+              <Plus className="w-4 h-4" /> Buat Tugas Baru
             </button>
           </div>
         </div>
@@ -675,7 +675,7 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {[
             {
-              label: 'Total Kuis',
+              label: 'Total Tugas',
               value: quizzes.length,
               icon: BookOpen,
               bg: 'bg-indigo-50',
@@ -730,11 +730,11 @@ export default function AdminDashboard() {
         ) : quizzes.length === 0 ? (
           <div className="bg-white rounded-2xl border shadow-sm p-16 text-center">
             <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-600 mb-2">Belum ada kuis</h3>
-            <p className="text-gray-400 text-sm mb-6">Buat kuis pertama Anda dengan upload materi untuk membuat soal secara otomatis!</p>
+            <h3 className="text-lg font-semibold text-gray-600 mb-2">Belum ada tugas</h3>
+            <p className="text-gray-400 text-sm mb-6">Buat tugas pertama Anda dengan upload materi untuk membuat soal secara otomatis!</p>
             <button onClick={() => setShowModal(true)}
               className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg transition font-semibold">
-              Buat Kuis Pertama
+              Buat Tugas Pertama
             </button>
           </div>
         ) : (
@@ -742,7 +742,7 @@ export default function AdminDashboard() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  <th className="text-left px-6 py-3 text-gray-600 font-medium">Judul Kuis</th>
+                  <th className="text-left px-6 py-3 text-gray-600 font-medium">Judul Tugas</th>
                   <th className="text-left px-6 py-3 text-gray-600 font-medium">Soal</th>
                   <th className="text-left px-6 py-3 text-gray-600 font-medium">Kesulitan</th>
                   <th className="text-left px-6 py-3 text-gray-600 font-medium">Timer</th>

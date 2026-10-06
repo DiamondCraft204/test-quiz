@@ -71,7 +71,7 @@ export default function ResultPage() {
       <div className="max-w-3xl mx-auto px-4 py-8">
         {/* Score Card */}
         <div className="bg-white rounded-2xl shadow-sm border p-8 mb-6 text-center">
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">Hasil Kuis</h1>
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">Hasil Tugas</h1>
           <p className={`text-lg font-semibold mb-6 ${statusLabel.color}`}>{statusLabel.text}</p>
           <ScoreCircle score={score} />
           <div className="flex justify-center gap-8 mt-6 text-center">
@@ -277,7 +277,7 @@ export default function ResultPage() {
         <div className="mt-8 text-center">
           <button onClick={() => navigate('/quizzes')}
             className="flex items-center gap-2 mx-auto bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-semibold transition">
-            <ArrowLeft className="w-4 h-4" /> Kembali ke Daftar Kuis
+            <ArrowLeft className="w-4 h-4" /> Kembali ke Daftar Tugas
           </button>
         </div>
       </div>

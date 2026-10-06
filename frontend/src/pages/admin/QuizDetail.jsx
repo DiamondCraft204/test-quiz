@@ -434,7 +434,7 @@ export default function QuizDetail() {
             <form onSubmit={handleUpdateEssayWeight} className="p-6 space-y-4">
               <div>
                 <p className="text-xs text-gray-600 leading-relaxed">
-                  Soal Pilihan Ganda & Benar-Salah memiliki bobot dasar <b>1x</b>. Bobot esai menentukan seberapa besar poin soal esai berkontribusi pada nilai akhir kuis.
+                  Soal Pilihan Ganda & Benar-Salah memiliki bobot dasar <b>1x</b>. Bobot esai menentukan seberapa besar poin soal esai berkontribusi pada nilai akhir tugas.
                 </p>
               </div>
 

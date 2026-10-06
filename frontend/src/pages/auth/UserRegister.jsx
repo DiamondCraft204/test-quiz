@@ -36,7 +36,7 @@ export default function UserRegister() {
             <span className="text-2xl font-bold">Ruang tugas</span>
           </div>
           <h2 className="text-2xl font-bold text-gray-800">Buat Akun</h2>
-          <p className="text-gray-500 text-sm mt-1">Daftar untuk mulai mengikuti kuis</p>
+          <p className="text-gray-500 text-sm mt-1">Daftar untuk mulai mengerjakan tugas</p>
         </div>
 
         {error && (

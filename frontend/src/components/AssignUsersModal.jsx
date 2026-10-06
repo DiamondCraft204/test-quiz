@@ -58,7 +58,7 @@ export default function AssignUsersModal({ quiz, onClose, onSuccess }) {
   const handleSave = async () => {
     setError('')
     if (targetType === 'specific' && selectedUserIds.length === 0) {
-      setError('Pilih minimal 1 peserta untuk kuis bertipe khusus.')
+      setError('Pilih minimal 1 peserta untuk tugas bertipe khusus.')
       return
     }
 
@@ -87,7 +87,7 @@ export default function AssignUsersModal({ quiz, onClose, onSuccess }) {
           <div>
             <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
               <Users className="w-5 h-5 text-indigo-600" />
-              Atur Sasaran Peserta Kuis
+              Atur Sasaran Peserta Tugas
             </h3>
             <p className="text-xs text-gray-500 mt-0.5 truncate max-w-md font-medium">
               {quiz?.title}
@@ -110,7 +110,7 @@ export default function AssignUsersModal({ quiz, onClose, onSuccess }) {
           {/* Audience Mode Selector */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
-              Tipe Akses Kuis
+              Tipe Akses Tugas
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div
@@ -134,7 +134,7 @@ export default function AssignUsersModal({ quiz, onClose, onSuccess }) {
                     Semua Peserta (Publik)
                   </div>
                   <p className="text-[11px] text-gray-500 mt-0.5">
-                    Semua peserta terdaftar dapat mengakses dan mengerjakan kuis ini.
+                    Semua peserta terdaftar dapat mengakses dan mengerjakan tugas ini.
                   </p>
                 </div>
               </div>

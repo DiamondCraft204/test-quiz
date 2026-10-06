@@ -81,7 +81,7 @@ router.post('/quizzes', upload.single('material'), async (req, res, next) => {
     } = req.body;
 
     if (!title) {
-      return res.status(400).json({ success: false, message: 'Judul kuis wajib diisi.' });
+      return res.status(400).json({ success: false, message: 'Judul tugas wajib diisi.' });
     }
 
     if (!req.file) {
@@ -203,7 +203,7 @@ router.post('/quizzes', upload.single('material'), async (req, res, next) => {
 
     return res.status(201).json({
       success: true,
-      message: `Kuis berhasil dibuat dengan ${savedQuestions.length} soal.`,
+      message: `Tugas berhasil dibuat dengan ${savedQuestions.length} soal.`,
       data: { quiz: savedQuiz, questions: savedQuestions },
     });
   } catch (err) {
@@ -216,7 +216,7 @@ router.get('/quizzes/:id', async (req, res, next) => {
   try {
     const quizRes = await db.query('SELECT * FROM quizzes WHERE id = $1', [req.params.id]);
     if (quizRes.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Kuis tidak ditemukan.' });
+      return res.status(404).json({ success: false, message: 'Tugas tidak ditemukan.' });
     }
 
     const quiz = quizRes.rows[0];
@@ -251,7 +251,7 @@ router.put('/quizzes/:id', async (req, res, next) => {
 
     const quizRes = await db.query('SELECT * FROM quizzes WHERE id = $1', [req.params.id]);
     if (quizRes.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Kuis tidak ditemukan.' });
+      return res.status(404).json({ success: false, message: 'Tugas tidak ditemukan.' });
     }
 
     const quiz = quizRes.rows[0];
@@ -297,7 +297,7 @@ router.put('/quizzes/:id', async (req, res, next) => {
       [updatedTitle, updatedDescription, updatedTimer, updatedDifficulty, updatedNumQ, updatedTypes, updatedTargetType, updatedAllowedUserIds, updatedEssayWeight, req.params.id]
     );
 
-    return res.json({ success: true, message: 'Kuis berhasil diperbarui.', data: updatedRes.rows[0] });
+    return res.json({ success: true, message: 'Tugas berhasil diperbarui.', data: updatedRes.rows[0] });
   } catch (err) {
     next(err);
   }
@@ -310,7 +310,7 @@ router.put('/quizzes/:id/audience', async (req, res, next) => {
 
     const quizRes = await db.query('SELECT id FROM quizzes WHERE id = $1', [req.params.id]);
     if (quizRes.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Kuis tidak ditemukan.' });
+      return res.status(404).json({ success: false, message: 'Tugas tidak ditemukan.' });
     }
 
     const finalTargetType = targetType === 'specific' ? 'specific' : 'all';
@@ -349,13 +349,13 @@ router.delete('/quizzes/:id', async (req, res, next) => {
   try {
     const quizRes = await db.query('SELECT id FROM quizzes WHERE id = $1', [req.params.id]);
     if (quizRes.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Kuis tidak ditemukan.' });
+      return res.status(404).json({ success: false, message: 'Tugas tidak ditemukan.' });
     }
 
     // ON DELETE CASCADE automatically deletes questions and submissions
     await db.query('DELETE FROM quizzes WHERE id = $1', [req.params.id]);
 
-    return res.json({ success: true, message: 'Kuis berhasil dihapus.' });
+    return res.json({ success: true, message: 'Tugas berhasil dihapus.' });
   } catch (err) {
     next(err);
   }
@@ -366,7 +366,7 @@ router.post('/quizzes/:id/publish', async (req, res, next) => {
   try {
     const quizRes = await db.query('SELECT * FROM quizzes WHERE id = $1', [req.params.id]);
     if (quizRes.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Kuis tidak ditemukan.' });
+      return res.status(404).json({ success: false, message: 'Tugas tidak ditemukan.' });
     }
 
     const quiz = quizRes.rows[0];
@@ -377,7 +377,7 @@ router.post('/quizzes/:id/publish', async (req, res, next) => {
     const statusLabel = newStatus === 1 ? 'dipublikasikan' : 'disembunyikan';
     return res.json({
       success: true,
-      message: `Kuis berhasil ${statusLabel}.`,
+      message: `Tugas berhasil ${statusLabel}.`,
       data: { is_published: newStatus },
     });
   } catch (err) {
@@ -390,7 +390,7 @@ router.get('/quizzes/:id/results', async (req, res, next) => {
   try {
     const quizRes = await db.query('SELECT id, title FROM quizzes WHERE id = $1', [req.params.id]);
     if (quizRes.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Kuis tidak ditemukan.' });
+      return res.status(404).json({ success: false, message: 'Tugas tidak ditemukan.' });
     }
 
     const submissionsRes = await db.query(
@@ -548,7 +548,7 @@ router.post('/quizzes/:id/regenerate', async (req, res, next) => {
   try {
     const quizRes = await db.query('SELECT * FROM quizzes WHERE id = $1', [req.params.id]);
     if (quizRes.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Kuis tidak ditemukan.' });
+      return res.status(404).json({ success: false, message: 'Tugas tidak ditemukan.' });
     }
 
     const quiz = quizRes.rows[0];
@@ -660,7 +660,7 @@ router.post('/quizzes/:id/questions', async (req, res, next) => {
 
     const quizRes = await db.query('SELECT id FROM quizzes WHERE id = $1', [req.params.id]);
     if (quizRes.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Kuis tidak ditemukan.' });
+      return res.status(404).json({ success: false, message: 'Tugas tidak ditemukan.' });
     }
 
     const maxOrderRes = await db.query('SELECT COALESCE(MAX(order_num), 0) AS max FROM questions WHERE quiz_id = $1', [req.params.id]);

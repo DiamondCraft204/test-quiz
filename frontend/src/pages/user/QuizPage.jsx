@@ -112,7 +112,7 @@ export default function QuizPage() {
       }
       localStorage.setItem(`quiz_progress_${id}`, JSON.stringify(toSave))
     } catch (e) {
-      console.error('Gagal menyimpan progres kuis:', e)
+      console.error('Gagal menyimpan progres tugas:', e)
     }
   }, [id, answers, current, cheatViolations, cheatWarningModal, warningMessage])
 
@@ -185,7 +185,7 @@ export default function QuizPage() {
       if (res.data.data.alreadySubmitted) {
         localStorage.removeItem(`quiz_start_${id}`)
         localStorage.removeItem(`quiz_progress_${id}`)
-        alert('Anda sudah menyelesaikan kuis ini. Kuis hanya dapat dikerjakan 1 kali.')
+        alert('Anda sudah menyelesaikan tugas ini. Tugas hanya dapat dikerjakan 1 kali.')
         navigate(`/quiz/${id}/result/${res.data.data.submissionId}`)
         return
       }
@@ -198,7 +198,7 @@ export default function QuizPage() {
         setCurrent(0)
       }
     } catch (err) {
-      const msg = err.response?.data?.message || 'Gagal memuat kuis.'
+      const msg = err.response?.data?.message || 'Gagal memuat tugas.'
       alert(msg)
       navigate('/quizzes')
     } finally {

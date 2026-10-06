@@ -63,7 +63,7 @@ export default function QuizList() {
       <div className="max-w-5xl mx-auto px-4 py-8">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-800">Selamat Datang, {user?.name}! 👋</h1>
-          <p className="text-gray-500 mt-1">Pilih kuis yang ingin kamu ikuti atau tinjau kuis yang sudah selesai.</p>
+          <p className="text-gray-500 mt-1">Pilih tugas yang ingin kamu kerjakan atau tinjau tugas yang sudah selesai.</p>
         </div>
 
         {/* Menu Tab: Semua, Belum Dikerjakan, Sudah Dikerjakan */}
@@ -76,7 +76,7 @@ export default function QuizList() {
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
-            Semua Kuis
+            Semua Tugas
             <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{quizzes.length}</span>
           </button>
           <button
@@ -111,10 +111,10 @@ export default function QuizList() {
           <div className="bg-white rounded-2xl border shadow-sm p-16 text-center">
             <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-600 mb-2">
-              {filterTab === 'completed' ? 'Belum ada kuis yang selesai' : filterTab === 'unanswered' ? 'Semua kuis sudah dikerjakan!' : 'Belum ada kuis'}
+              {filterTab === 'completed' ? 'Belum ada tugas yang selesai' : filterTab === 'unanswered' ? 'Semua tugas sudah dikerjakan!' : 'Belum ada tugas'}
             </h3>
             <p className="text-gray-400 text-sm">
-              {filterTab === 'completed' ? 'Kuis yang kamu selesaikan akan muncul di sini.' : 'Silakan tunggu kuis baru dari admin.'}
+              {filterTab === 'completed' ? 'Tugas yang kamu selesaikan akan muncul di sini.' : 'Silakan tunggu tugas baru dari admin.'}
             </p>
           </div>
         ) : (
@@ -167,7 +167,7 @@ export default function QuizList() {
                     ) : (
                       <button onClick={() => navigate(`/quiz/${quiz.id}`)}
                         className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold py-2 rounded-xl flex items-center justify-center gap-1.5 transition shadow-sm">
-                        Mulai Kuis <ChevronRight className="w-4 h-4" />
+                        Mulai Kerjakan Tugas <ChevronRight className="w-4 h-4" />
                       </button>
                     )}
                   </div>

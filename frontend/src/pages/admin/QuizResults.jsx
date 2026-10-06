@@ -203,7 +203,7 @@ export default function QuizResults() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-800">Hasil Peserta & Kelola Nilai</h1>
-            <p className="text-gray-500 mt-1">Kuis: <span className="font-semibold text-gray-700">{data?.quiz?.title}</span></p>
+            <p className="text-gray-500 mt-1">Tugas: <span className="font-semibold text-gray-700">{data?.quiz?.title}</span></p>
           </div>
           <div className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-3 py-2 rounded-lg flex items-center gap-2">
             <Edit3 className="w-4 h-4 flex-shrink-0" />
@@ -230,7 +230,7 @@ export default function QuizResults() {
         {submissions.length === 0 ? (
           <div className="bg-white rounded-2xl border p-12 text-center">
             <Users className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500">Belum ada peserta yang mengikuti kuis ini.</p>
+            <p className="text-gray-500">Belum ada peserta yang mengerjakan tugas ini.</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -651,7 +651,7 @@ export default function QuizResults() {
 
               <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
                 <span className="text-xs text-gray-400">
-                  *Total nilai kuis akan dihitung ulang secara otomatis.
+                  *Total nilai tugas akan dihitung ulang secara otomatis.
                 </span>
                 <div className="flex items-center gap-2">
                   <button
