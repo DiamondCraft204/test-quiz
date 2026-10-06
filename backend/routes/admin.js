@@ -434,6 +434,83 @@ router.get('/quizzes/:id/results', async (req, res, next) => {
   }
 });
 
+// ─── PUT /api/admin/submissions/:id ───────────────────────────────────────────
+router.put('/submissions/:id', async (req, res, next) => {
+  try {
+    const { score, answers, correctCount } = req.body;
+
+    const subRes = await db.query('SELECT * FROM submissions WHERE id = $1', [req.params.id]);
+    if (subRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Submission tidak ditemukan.' });
+    }
+
+    const currentSub = subRes.rows[0];
+
+    let newScore = score !== undefined ? parseFloat(score) : currentSub.score;
+    if (isNaN(newScore)) newScore = currentSub.score;
+    newScore = Math.max(0, Math.min(100, Math.round(newScore * 10) / 10));
+
+    let newAnswersStr = currentSub.answers;
+    let newCorrectCount = correctCount !== undefined ? parseInt(correctCount, 10) : currentSub.correct_count;
+
+    if (answers !== undefined) {
+      const parsedAnswers = Array.isArray(answers)
+        ? answers
+        : typeof answers === 'string'
+        ? JSON.parse(answers)
+        : null;
+
+      if (parsedAnswers) {
+        newAnswersStr = JSON.stringify(parsedAnswers);
+
+        // If score was not explicitly overridden, recalculate from answers
+        if (score === undefined) {
+          const totalQ = currentSub.total_questions || parsedAnswers.length || 1;
+          const sumPoints = parsedAnswers.reduce((sum, a) => {
+            const qScore = a.score !== undefined ? a.score : (a.isCorrect ? 100 : 0);
+            return sum + (qScore / 100);
+          }, 0);
+          const baseScore = (sumPoints / totalQ) * 100;
+          const penalty = (currentSub.cheat_violations || 0) * 5;
+          newScore = Math.max(0, Math.min(100, Math.round((baseScore - penalty) * 10) / 10));
+        }
+
+        // Recalculate correct count if not specified
+        if (correctCount === undefined) {
+          newCorrectCount = parsedAnswers.filter((a) => {
+            const qScore = a.score !== undefined ? a.score : (a.isCorrect ? 100 : 0);
+            return qScore >= 70;
+          }).length;
+        }
+      }
+    }
+
+    const updateRes = await db.query(
+      `UPDATE submissions
+       SET score = $1, answers = $2, correct_count = $3
+       WHERE id = $4
+       RETURNING *`,
+      [newScore, newAnswersStr, newCorrectCount, req.params.id]
+    );
+
+    const fullRes = await db.query(
+      `SELECT s.*, u.name AS user_name, u.email AS user_email
+       FROM submissions s
+       JOIN users u ON u.id = s.user_id
+       WHERE s.id = $1`,
+      [req.params.id]
+    );
+
+    return res.json({
+      success: true,
+      message: 'Nilai peserta berhasil diperbarui.',
+      data: fullRes.rows[0] || updateRes.rows[0],
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── POST /api/admin/quizzes/:id/regenerate ──────────────────────────────────
 router.post('/quizzes/:id/regenerate', async (req, res, next) => {
   try {
