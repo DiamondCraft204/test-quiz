@@ -368,6 +368,7 @@ router.post('/:id/submit', authenticateUser, async (req, res, next) => {
     const violationCount = Math.max(0, parseInt(cheatViolations, 10) || 0);
     const penaltyPoints = violationCount * 5;
     const finalScore = Math.max(0, Math.min(100, Math.round((baseScore - penaltyPoints) * 10) / 10));
+    const totalQuestions = questions.length;
 
     const subInsert = await db.query(
       `INSERT INTO submissions (quiz_id, user_id, answers, score, total_questions, correct_count, time_taken, cheat_violations)
